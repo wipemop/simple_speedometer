@@ -932,6 +932,14 @@ void AddonRender()
             }
             ImGui::End();
 
+            // Speed calculation according to settings and variables for the max amplitude / exceeding speed animations on needle and numbers
+            int speed = static_cast<int>(roundf((Settings::option2D ? lastSpeed2D : lastSpeed3D) * (Settings::optionUnits ? conversionFactor_u_s : (Settings::optionFeetPercent ? conversionFactor_foot : conversionFactor_beetle)))); // Calculating the concurrent speed
+            float minAngle = -18.0f; // Minimum needle angle
+            float maxAngle = 99.0f; // Maximum needle angle
+            float needleLimitUnits = Settings::amplitudeUnits; // Needle max amp for units
+            float needleLimitFeetPercent = Settings::amplitudeFeetPercent; // Needle max amp for feet
+            float needleLimitBeetlePercent = Settings::amplitudeBeetlePercent; // Needle max amp for beetle
+            float needleLimit = (Settings::optionUnits ? needleLimitUnits : (Settings::optionFeetPercent ? needleLimitFeetPercent : needleLimitBeetlePercent) + 0.01); // Whether the needle max amp for units, feet or beetle is to be used
 
             // Setting up ImGui Windows for the Speedometer needle and max amp animations
             if (!needleTexture or !blueneedleTexture)
@@ -941,16 +949,6 @@ void AddonRender()
             }
             if (needleTexture and blueneedleTexture)
             {
-
-                float baseSpeed = Settings::option2D ? lastSpeed2D : lastSpeed3D; // Whether 2D or 3D speed is to be used
-                float convFactor = Settings::optionUnits ? conversionFactor_u_s : (Settings::optionFeetPercent ? conversionFactor_foot : conversionFactor_beetle); // Whether units, feet or beetle conversion is to be used
-                float speed = baseSpeed * convFactor; // Calculating converted speed
-                float minAngle = -18.0f; // Minimum needle angle
-                float maxAngle = 99.0f; // Maximum needle angle
-                float needleLimitUnits = Settings::amplitudeUnits; // Needle max amp for units
-                float needleLimitFeetPercent = Settings::amplitudeFeetPercent; // Needle max amp for feet
-                float needleLimitBeetlePercent = Settings::amplitudeBeetlePercent; // Needle max amp for beetle
-                float needleLimit = (Settings::optionUnits ? needleLimitUnits : (Settings::optionFeetPercent ? needleLimitFeetPercent : needleLimitBeetlePercent)) + 1; // Whether the needle max amp for units, feet or beetle is to be used
 
                 // Render max amp sparking from needle pivot underneath the needle
                 if (!fireTexture)
@@ -1167,17 +1165,9 @@ void AddonRender()
                 ImGui::SetNextWindowSize(ImVec2(dialSize));
                 ImGui::Begin("Numbers", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
-                int speedValue = static_cast<int>(roundf((Settings::option2D ? lastSpeed2D : lastSpeed3D) * (Settings::optionUnits ? conversionFactor_u_s : (Settings::optionFeetPercent ? conversionFactor_foot : conversionFactor_beetle)))); // Calculating the concurrent speed
-
                 // Turning the concurrent speed into a four-piece string with leading zeroes
                 char speedStr[5];
-                snprintf(speedStr, sizeof(speedStr), "%04d", speedValue);
-
-                // Variables to determine which number gets picked and drawn
-                float needleLimitUnits = Settings::amplitudeUnits;
-                float needleLimitFeetPercent = Settings::amplitudeFeetPercent;
-                float needleLimitBeetlePercent = Settings::amplitudeBeetlePercent;
-                float needleLimit = (Settings::optionUnits ? needleLimitUnits : (Settings::optionFeetPercent ? needleLimitFeetPercent : needleLimitBeetlePercent)) + 1;
+                snprintf(speedStr, sizeof(speedStr), "%04d", speed);
                 bool leadingZero = true;
 
                 // Looping through the four digits
@@ -1194,7 +1184,7 @@ void AddonRender()
                     else
                     {
                         leadingZero = false;
-                        digitRow = (speedValue < needleLimit) ? 0 : 1;
+                        digitRow = (speed > needleLimit) ? 1 : 0;
                     }
 
                     float digitWidth = 1.0f / 12.0f; // Width of each number determined as a divider of the total width of the sprite sheet
@@ -1663,12 +1653,12 @@ void AddonOptions()
         Settings::Settings[NEEDLE_AMPLITUDE_UNITS] = Settings::amplitudeUnits;
         Settings::Save(SettingsPath);
     }
-    if (ImGui::DragFloat("Set between 5 and 1000", &Settings::amplitudeFeetPercent, 0.5f, 5.0f, 1000.0f, "%.1f Feet%%"))
+    if (ImGui::DragFloat("Set between 5 and 1000", &Settings::amplitudeFeetPercent, 1.0f, 5.0f, 1000.0f, "%.1f Feet%%"))
     {
         Settings::Settings[NEEDLE_AMPLITUDE_FEETPERCENT] = Settings::amplitudeFeetPercent;
         Settings::Save(SettingsPath);
     }
-    if (ImGui::DragFloat("Set between 1 and 150", &Settings::amplitudeBeetlePercent, 0.1f, 1.0f, 200.0f, "%.1f Beetle%%"))
+    if (ImGui::DragFloat("Set between 1 and 150", &Settings::amplitudeBeetlePercent, 1.0f, 1.0f, 200.0f, "%.1f Beetle%%"))
     {
         Settings::Settings[NEEDLE_AMPLITUDE_BEETLEPERCENT] = Settings::amplitudeBeetlePercent;
         Settings::Save(SettingsPath);
