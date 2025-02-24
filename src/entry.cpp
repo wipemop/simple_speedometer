@@ -1405,6 +1405,8 @@ void AddonRender()
             ImGui::End();
         }
     }
+    // segment displays Mumble API values from the Identity category. I am interested in this as i may need the world ID value specifically at a later date, but it is of no value for the user, so it lives here as a comment.
+    /*
     ImGui::SetNextWindowBgAlpha(0.35f);
     ImGui::SetNextWindowPos(ImVec2(100, 100));
     ImGui::SetNextWindowSize(ImVec2(150, 300));
@@ -1453,6 +1455,7 @@ void AddonRender()
         }
     }
     ImGui::End();
+    */
 }
 
 // Handling the keybind that toggles the Speedometer
