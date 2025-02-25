@@ -163,10 +163,10 @@ namespace Settings
 	float amplitudeBeetlePercent = 99.0f;
 	float DialPositionH = 250.0f;
 	float DialPositionV = 250.0f;
-	float DialScale = 80.0f;
+	float DialScale = 60.0f;
 	bool IsTimerEnabled = true;
 	float TimerPositionH = 250.0f;
 	float TimerPositionV = 100.0f;
-	float TimerScale = 80.0f;
+	float TimerScale = 60.0f;
 	bool restoreDefaults = false;
 }
