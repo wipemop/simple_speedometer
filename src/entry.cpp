@@ -1641,7 +1641,7 @@ void AddonRender()
             ImGui::PopStyleVar(2);
         }
     }
-
+    /*
     // segment displays Mumble API values from the Identity category. I am interested in this as i may need the world ID value specifically at a later date, but it is of no value for the user, so it lives here as a comment.
     ImGui::SetNextWindowBgAlpha(0.35f);
     ImGui::SetNextWindowPos(ImVec2(100, 100));
@@ -1691,6 +1691,7 @@ void AddonRender()
         }
     }
     ImGui::End();
+    */
 }
 
 // Handling the keybind that toggles the Speedometer
@@ -1740,25 +1741,66 @@ void TimerPauseReset(const char* aIdentifier, bool aIsRelease)
         Vector3 currentPos = MumbleLink->AvatarPosition;
         QueryPerformanceCounter(&current);
 
-        if (!timerPaused && timerRunning)
+        if (Settings::optionManual)
         {
-            double currElapsed = static_cast<double>(current.QuadPart - timerStart.QuadPart) / frequency.QuadPart;
-            if (currElapsed > 0.0)
+            if (!timerPaused && timerRunning)
             {
-                timerPaused = true;
-                pausedElapsedSeconds = currElapsed;
-                timerRunning = false;
-                pausePos = currentPos;
+                double currElapsed = static_cast<double>(current.QuadPart - timerStart.QuadPart) / frequency.QuadPart;
+                if (currElapsed > 0.0)
+                {
+                    timerPaused = true;
+                    pausedElapsedSeconds = currElapsed;
+                    timerRunning = false;
+                    pausePos = currentPos;
+                }
             }
-        }
-        else if (timerPaused)
-        {
-            if (pausedElapsedSeconds > 0.0)
+
+            else if (timerPaused)
+            {
+                if (pausedElapsedSeconds > 0.0)
+                {
+                    timerPaused = false;
+                    timerRunning = false;
+                    pausedElapsedSeconds = 0.0;
+                    basePos = currentPos;
+                }
+            }
+            else
             {
                 timerPaused = false;
                 timerRunning = false;
                 pausedElapsedSeconds = 0.0;
                 basePos = currentPos;
+            }
+        }
+        if (Settings::optionCustom)
+        {
+            if (timerHotkeyCount == 4)
+            {
+                timerHotkeyCount = 1;
+            }
+            if (timerHotkeyCount == 3)
+            {
+                timerFinishSet = false;
+                timerStartSet = false;
+                timerPaused = false;
+                timerRunning = false;
+                timerStartEntered = false;
+                basePos = { -10000.0f, -10000.0f, -10000.0f };
+                pausePos = { -10000.0f, -10000.0f, -10000.0f };
+                timerHotkeyCount = 4;
+            }
+            if (timerHotkeyCount == 2)
+            {
+                timerFinishSet = true;
+                pausePos = currentPos;
+                timerHotkeyCount = 3;
+            }
+            if (timerHotkeyCount == 1)
+            {
+                timerStartSet = true;
+                basePos = currentPos;
+                timerHotkeyCount = 2;
             }
         }
     }
