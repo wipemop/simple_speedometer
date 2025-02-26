@@ -78,14 +78,20 @@ static double currElapsed = 0;
 static LARGE_INTEGER timerStart = { 0 };
 static LARGE_INTEGER frequency = { 0 };
 static bool frequencyInitialized = false;
-static Vector3 basePos = { 0.0f, 0.0f, 0.0f };
+static Vector3 basePos = { -10000.0f, -10000.0f, -10000.0f };
 static bool basePosInitialized = false;
-static Vector3 pausePos = { 0.0f, 0.0f, 0.0f };
+static Vector3 pausePos = { -10000.0f, -10000.0f, -10000.0f };
 static bool pausePosInitialized = false;
 static LARGE_INTEGER current = { 0 };
 static Vector3 currentPos = { 0.0f, 0.0f, 0.0f };
 float g_basedistance = 0.0f;
 Vector3 g_currentPos = { 0.0f, 0.0f, 0.0f };
+float g_pausedistance = 0.0f;
+static bool timerStartSet = false;
+static bool timerFinishSet = false;
+static bool timerStartEntered = false;
+static int timerHotkeyCount = 4;
+float g_circlethickness = 0.0f;
 
 
 /* Textures */
@@ -98,6 +104,7 @@ Texture* fireTexture = nullptr;
 Texture* pivotTexture = nullptr;
 Texture* timerTexture = nullptr;
 Texture* stopwatchTexture = nullptr;
+Texture* timerindicatorTexture = nullptr;
 
 extern Texture* speedometerTexture;
 extern Texture* needleTexture;
@@ -108,6 +115,7 @@ extern Texture* fireTexture;
 extern Texture* pivotTexture;
 extern Texture* timerTexture;
 extern Texture* stopwatchTexture;
+extern Texture* timerindicatorTexture;
 
 // DllMain: Main entry point for DLL. We are not interested in this, all we get is our own HMODULE in case we need it.
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
@@ -451,7 +459,7 @@ static bool WorldToScreen(const Vector3& worldPos, const Matrix4& view, const Ma
 }
 
 // Rendering the timer starting location as a circle on the ground and visualizing the timer trigger distance with another smaller circle located at the player character position, akin to a bubble level. Both circles come with a black outline to help visibility in different lighting conditions and on different texture colors
-static void RenderGroundCircle(const Vector3& worldCenter, float worldRadius, ImU32 colorchoice, int numSegments = 32)
+static void RenderGroundCircle(const Vector3& worldCenter, float worldRadius, ImU32 colorchoice, int numSegments = 64)
 {
     if (NexusLink && MumbleLink && MumbleIdentity && !MumbleLink->Context.IsMapOpen && NexusLink->IsGameplay)
     {
@@ -475,19 +483,10 @@ static void RenderGroundCircle(const Vector3& worldCenter, float worldRadius, Im
             float fov = 70 / 1.2220f * MumbleIdentity->FOV; // Don't ask me why, but 70 degrees FOV in this calculation matches max ingame FOV, which is reported by mumble as 1.2220. To properly adjust calculation for FoV, 70 / 1.2220 * mumble fov is the way. If it works, it works
             Matrix4 projection = Perspective(fov, screenWidth / screenHeight, 0.1f, 1000.0f);
 
-            // Calculating the center in screen-space
-            MyVector2 screenCenter;
-
-            // Aborting render calculations if the center point isn't on screen
-            if (!WorldToScreen(centerMath, view, projection, screenWidth, screenHeight, screenCenter))
-            {
-                return;
-            }
-
             // Doing math to generate a perspective-accurate circle render that adjusts based on camera angle. Circle area lies in the 2D space of X and Z coordinates, with its axis being Y
             std::vector<MyVector2> screenPoints;
-            screenPoints.reserve(numSegments + 1);
-            for (int i = 0; i <= numSegments; i++)
+            screenPoints.reserve(numSegments);
+            for (int i = 0; i < numSegments; i++)
             {
                 float theta = (2.0f * 3.14159265f * i) / numSegments;
                 float cosTheta = std::cos(theta);
@@ -501,63 +500,25 @@ static void RenderGroundCircle(const Vector3& worldCenter, float worldRadius, Im
                 {
                     screenPoints.push_back(sp);
                 }
-                screenPoints.push_back(sp);
             }
 
             // If none of the calculated points of the circle's circumference match visible screen coordinates, aka circle not visible on screen area, abort rendering
             if (screenPoints.empty())
                 return;
 
-            // Handling a bug where a circle located to the right and back of the camera, outside of view, would render as a distorted pair of lines from the upper left corner of screen towards its off-screen location. Since this can only happen if the circle is not on screen, but the code thinks it is, if this happens, rendering gets aborted 
-            for (const auto& pt : screenPoints)
-            {
-                if (pt.x < 10 && pt.y < 10)
-                {
-                    return;
-                }
-            }
-
-            // This calculates distance between camera and circle center, which wasn't what i needed to do the fading, but it could be useful later on so it lives as a comment for now 
-            //float distance = std::sqrt(
-            //    (camPos.X - centerMath.X) * (camPos.X - centerMath.X) +
-            //    (camPos.Y - centerMath.Y) * (camPos.Y - centerMath.Y) +
-            //    (camPos.Z - centerMath.Z) * (camPos.Z - centerMath.Z)
-            //);
-
-            // Setting up the distances (original Mumble-values, not converted to ingame units) that must be between player character and circle center for when to start and finish fading 
-            float fadeStart = 4.0f;
-            float fadeEnd = 7.0f;
-            float basedistance = g_basedistance;
-
-            // Calculating the alpha value (= opacity of the circles) based on distance between player character and circle center. Clamping alpha to zero when max distance is exceeded
-            float circlealpha = 1.0f;
-            if (basedistance > fadeStart)
-            {
-                circlealpha = 1.0f - ((basedistance - fadeStart) / (fadeEnd - fadeStart));
-                if (circlealpha < 0.0f) circlealpha = 0.0f;
-            }
-            float dotalpha = 1.0f;
-            if (basedistance > fadeStart) {
-                dotalpha = 1.0f - ((basedistance - fadeStart) / (fadeEnd - fadeStart));
-                if (dotalpha < 0.0f) dotalpha = 0.0f;  // Begrenze auf min. 0
-            }
-
-            ImU32 circlecolorblack = IM_COL32(0, 0, 0, static_cast<int>(circlealpha * 255)); // calculating the black base of the circles, on which the colored insides will be rendered. Those get their color information passed via the function call
-
             // Rendering the circles one after another
-            if (!screenPoints.empty()) {
-                ImDrawList* drawList = ImGui::GetForegroundDrawList();
-                std::vector<ImVec2> imPointsBlack;
-                imPointsBlack.reserve(screenPoints.size());
-                for (const auto& pt : screenPoints)
-                    imPointsBlack.push_back(ImVec2(pt.x, pt.y));
-                imPointsBlack.reserve(screenPoints.size());
-                drawList->AddPolyline(imPointsBlack.data(), imPointsBlack.size(), circlecolorblack, true, 9.0f);
-                std::vector<ImVec2> imPointschoice;
-                for (const auto& pt : screenPoints)
-                    imPointschoice.push_back(ImVec2(pt.x, pt.y));
-                imPointschoice.reserve(screenPoints.size());
-                drawList->AddPolyline(imPointschoice.data(), imPointschoice.size(), colorchoice, true, 2.0f);
+            ImDrawList* drawList = ImGui::GetForegroundDrawList();
+
+            for (size_t i = 0; i < screenPoints.size(); i++)
+            {
+                size_t nextIndex = (i + 1) % screenPoints.size(); // Kreis schließen
+                const MyVector2& p0 = screenPoints[i];
+                const MyVector2& p1 = screenPoints[nextIndex];
+
+                // Handling a bug where a circle located to the right and back of the camera, outside of view, would render as a distorted pair of lines from the upper left corner of screen towards its off-screen location. Since this can only happen if the circle is not on screen, but the code thinks it is, if this happens, rendering of the affected segments gets aborted
+                if ((p0.x < 10 && p0.y < 10) || (p1.x < 10 && p1.y < 10))
+                    continue;
+                drawList->AddLine(ImVec2(p0.x, p0.y), ImVec2(p1.x, p1.y), colorchoice, g_circlethickness);
             }
         }
     }
@@ -574,13 +535,28 @@ void UpdateTimer()
         }
 
         Vector3 currentPos = MumbleLink->AvatarPosition;
-        const float movementThreshold = 0.075f; // Maximum distance allowed to move away from the start position before the timer triggers, also used to calculate the radii of the circle indicators for visualization of the timer trigger mechanic
+
+        const float manualmovementThreshold = Settings::manualstartDiameter / conversionFactor_u_s - 0.381f;
+        const float movementThreshold = Settings::startDiameter / conversionFactor_u_s - 0.381f; // Maximum distance allowed to move away from the start position before the timer triggers, also used to calculate the radii of the circle indicators for visualization of the timer trigger mechanic
+        const float finishThreshold = Settings::finishDiameter / conversionFactor_u_s + 0.381f;
 
         // Initial setup of the base coordinates that act as the starting position for the timer
-        if (!basePosInitialized) {
-            basePos = currentPos;
-            basePosInitialized = true;
+        if (Settings::optionManual)
+        {
+            if (!basePosInitialized) {
+                basePos = currentPos;
+                basePosInitialized = true;
+            }
         }
+
+        // This calculates distance between camera and circle center, which wasn't what i needed to do the fading, but it could be useful later on so it lives as a comment for now 
+        /*
+        float distance = std::sqrt(
+            (camPos.X - centerMath.X) * (camPos.X - centerMath.X) +
+            (camPos.Y - centerMath.Y) * (camPos.Y - centerMath.Y) +
+            (camPos.Z - centerMath.Z) * (camPos.Z - centerMath.Z)
+        );
+        */
 
         // Calculating the distance between base coordinates where the timer was set and the concurrent position of the player character
         float basedx = currentPos.X - basePos.X;
@@ -594,56 +570,205 @@ void UpdateTimer()
         float pausedz = currentPos.Z - pausePos.Z;
         float pausedistance = sqrtf(pausedx * pausedx + pausedy * pausedy + pausedz * pausedz);
 
-        g_basedistance = basedistance; // Exporting coordinates for use in a different function
+        // Exporting coordinates for use in a different function
+        g_basedistance = basedistance; 
+        g_pausedistance = pausedistance;
 
         // Same as in RenderGroundCircle() but for the colored insides of the circles. Calculating the alpha value (= opacity of the circles) based on distance between player character and circle center. Clamping alpha to zero when max distance is exceeded
-        float fadeStart = 4.0f;  // Ab hier beginnt das Ausblenden
-        float fadeEnd = 7.0f;    // Komplett unsichtbar
+        float startingcircleFadingStart = 160.0f;
+        float startingcircleFadingEnd = 200.0f;
+
+        float selfclosestartFadingStart = Settings::startDiameter / conversionFactor_u_s + 7.0f;
+        float selfclosestartFadingEnd = Settings::startDiameter / conversionFactor_u_s + 10.0f;
+
+        float selfclosemanualstartFadingStart = Settings::manualstartDiameter / conversionFactor_u_s + 7.0f;
+        float selfclosemanualstartFadingEnd = Settings::manualstartDiameter / conversionFactor_u_s + 10.0f;
+
+        float finishcircleFadingStart = 160.0f;
+        float finishcircleFadingEnd = 200.0f;
+
+        float selfclosefinishFadingStart = Settings::finishDiameter / conversionFactor_u_s + 25.0f;
+        float selfclosefinishFadingEnd = Settings::finishDiameter / conversionFactor_u_s + 30.0f;
 
         // Calculating alpha value for transparency
-        float dotalpha = 1.0f;
-        if (basedistance > fadeStart) {
-            dotalpha = 1.0f - ((basedistance - fadeStart) / (fadeEnd - fadeStart));
-            if (dotalpha < 0.0f) dotalpha = 0.0f;  // Begrenze auf min. 0
+        float startcirclealpha = 1.0f;
+        if (basedistance > startingcircleFadingStart)
+        {
+            startcirclealpha = 1.0f - ((basedistance - startingcircleFadingStart) / (startingcircleFadingEnd - startingcircleFadingStart));
+            if (startcirclealpha < 0.0f) startcirclealpha = 0.0f;
         }
 
-        // Passing the desired colors of the circle insides to the RenderGroundCircle() function and calling it
-        RenderGroundCircle(basePos, movementThreshold * 6.0f, IM_COL32(255, 255, 255, static_cast<int>(dotalpha * 255)));
-        RenderGroundCircle(currentPos, movementThreshold * 5.0f, IM_COL32(255, 125, 25, static_cast<int>(dotalpha * 255)));
-
-        // Handling triggering of the timer if it is paused
-        if (timerPaused)
+        float selfclosestartalpha = 1.0f;
+        if (basedistance > selfclosestartFadingStart)
         {
-            if (pausedistance > movementThreshold)
-            {
-                timerPaused = false;
-                timerRunning = true;
-                QueryPerformanceCounter(&current);
-                LONGLONG offset = static_cast<LONGLONG>(pausedElapsedSeconds * frequency.QuadPart);
-                timerStart.QuadPart = current.QuadPart - offset;
-            }
-            else
-            {
-                return;
-            }
+            selfclosestartalpha = 1.0f - ((basedistance - selfclosestartFadingStart) / (selfclosestartFadingEnd - selfclosestartFadingStart));
+            if (selfclosestartalpha < 0.0f) selfclosestartalpha = 0.0f;
         }
 
-        // Handling triggering of the timer if it is set
-        if (!timerRunning)
+        float selfclosemanualstartalpha = 1.0f;
+        if (basedistance > selfclosemanualstartFadingStart)
         {
-            if (basedistance > movementThreshold)
-            {
-                timerRunning = true;
-                QueryPerformanceCounter(&timerStart);
-            }
+            selfclosemanualstartalpha = 1.0f - ((basedistance - selfclosemanualstartFadingStart) / (selfclosemanualstartFadingEnd - selfclosemanualstartFadingStart));
+            if (selfclosemanualstartalpha < 0.0f) selfclosemanualstartalpha = 0.0f;
         }
 
-        // Handling resetting of the timer if the base coordinates are reached again
-        else
+        float finishcirclealpha = 1.0f;
+        if (pausedistance > finishcircleFadingStart) {
+            finishcirclealpha = 1.0f - ((pausedistance - finishcircleFadingStart) / (finishcircleFadingEnd - finishcircleFadingStart));
+            if (finishcirclealpha < 0.0f) finishcirclealpha = 0.0f;  // Begrenze auf min. 0
+        }
+
+        float selfclosefinishalpha = 1.0f;
+        if (pausedistance > selfclosefinishFadingStart) {
+            selfclosefinishalpha = 1.0f - ((pausedistance - selfclosefinishFadingStart) / (selfclosefinishFadingEnd - selfclosefinishFadingStart));
+            if (selfclosefinishalpha < 0.0f) selfclosefinishalpha = 0.0f;  // Begrenze auf min. 0
+        }
+
+        // Passing the desired colors of the circles to the RenderGroundCircle() function and calling it
+
+        if (Settings::optionCustom && timerHotkeyCount == 4)
         {
-            if (basedistance < movementThreshold)
+            g_circlethickness = 9.0f;
+            RenderGroundCircle(currentPos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(125)));
+
+            g_circlethickness = 2.0f;
+            RenderGroundCircle(currentPos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(125)));
+        }
+
+        if (Settings::optionCustom && (timerHotkeyCount == 2 || timerHotkeyCount == 3))
+        {
+            g_circlethickness = 9.0f;
+            RenderGroundCircle(basePos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+
+            g_circlethickness = 2.0f;
+            RenderGroundCircle(basePos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+        }
+
+        if (Settings::optionManual)
+        {
+            g_circlethickness = 9.0f;
+            RenderGroundCircle(basePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+
+            g_circlethickness = 2.0f;
+            RenderGroundCircle(basePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+
+            if (timerPaused)
             {
-                timerRunning = false;
+                g_circlethickness = 9.0f;
+                RenderGroundCircle(pausePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+
+                g_circlethickness = 2.0f;
+                RenderGroundCircle(pausePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+            }
+            g_circlethickness = 9.0f;
+            RenderGroundCircle(currentPos, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosemanualstartalpha * 255)));
+
+            g_circlethickness = 2.0f;
+            RenderGroundCircle(currentPos, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosemanualstartalpha * 255)));
+        }
+
+        if (Settings::optionCustom)
+        {
+            g_circlethickness = 9.0f;
+            RenderGroundCircle(currentPos, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosestartalpha * 255)));
+
+            g_circlethickness = 2.0f;
+            RenderGroundCircle(currentPos, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosestartalpha * 255)));
+
+            if (Settings::optionCustom && timerHotkeyCount == 2)
+            {
+                g_circlethickness = 9.0f;
+                RenderGroundCircle(currentPos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(125)));
+
+                g_circlethickness = 2.0f;
+                RenderGroundCircle(currentPos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(125)));
+            }
+            g_circlethickness = 9.0f;
+            RenderGroundCircle(pausePos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+
+            g_circlethickness = 2.0f;
+            RenderGroundCircle(pausePos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+
+            g_circlethickness = 9.0f;
+            RenderGroundCircle(currentPos, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosefinishalpha * 255)));
+
+            g_circlethickness = 2.0f;
+            RenderGroundCircle(currentPos, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosefinishalpha * 255)));
+        }
+
+        // Handling triggering of the timer if it is paused, but only if it is allowed to resume
+        if (Settings::optionManual)
+        {
+            if (timerPaused)
+            {
+                if (Settings::optionPause)
+                {
+                    if (pausedistance > manualmovementThreshold)
+                    {
+                        timerPaused = false;
+                        timerRunning = true;
+                        QueryPerformanceCounter(&current);
+                        LONGLONG offset = static_cast<LONGLONG>(pausedElapsedSeconds * frequency.QuadPart);
+                        timerStart.QuadPart = current.QuadPart - offset;
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+            }
+
+            // Handling triggering of the timer if it is set
+            if (!timerRunning && !timerPaused)
+            {
+                if (basedistance > manualmovementThreshold)
+                {
+                    timerRunning = true;
+                    QueryPerformanceCounter(&timerStart);
+                }
+            }
+
+            // Handling resetting of the timer if the base coordinates are reached again
+            if (timerRunning || timerPaused)
+            {
+                if (basedistance < manualmovementThreshold)
+                {
+                    timerRunning = false;
+                    timerPaused = false;
+                }
+            }
+        }
+        if (Settings::optionCustom)
+        {
+            if (timerStartSet && timerFinishSet)
+            {
+                if (basedistance < movementThreshold)
+                {
+                    timerStartEntered = true;
+                    timerRunning = false;
+                    timerPaused = false;
+                }
+                if (timerStartEntered && !timerRunning && !timerPaused)
+                {
+                    if (basedistance > movementThreshold)
+                    {
+                        timerRunning = true;
+                        QueryPerformanceCounter(&timerStart);
+                    }
+                }
+                if (timerStartEntered && timerRunning)
+                {
+                    if (pausedistance < finishThreshold)
+                    {
+                        double currElapsed = static_cast<double>(current.QuadPart - timerStart.QuadPart) / frequency.QuadPart;
+                        if (currElapsed > 0.0)
+                        {
+                            timerPaused = true;
+                            pausedElapsedSeconds = currElapsed;
+                            timerRunning = false;
+                        }
+                    }
+                }
             }
         }
     }
@@ -652,10 +777,6 @@ void UpdateTimer()
 // Main function responsible for rendering of the timer widget
 void RenderTimerWindow()
 {
-    //ImGuiStyle& style = ImGui::GetStyle();
-    //float oldBorderSize = style.WindowBorderSize;
-    //style.WindowBorderSize = 0.0f;
-
     if (NexusLink && MumbleLink && MumbleIdentity && !MumbleLink->Context.IsMapOpen && NexusLink->IsGameplay)
     {
         if (Settings::IsTimerEnabled)
@@ -689,7 +810,7 @@ void RenderTimerWindow()
 
             // Handling timer position and size through the sliders in the settings
             ImVec2 TimerPos = ImVec2(Settings::TimerPositionH, Settings::TimerPositionV);
-            ImVec2 TimerSize = ImVec2(Settings::TimerScale * 5.50f, Settings::TimerScale * 1.70f);
+            ImVec2 TimerSize = ImVec2(Settings::TimerScale * 5.50f, Settings::TimerScale * 2.30f);
 
             // previously the timer didn't feature a clickable stopwatch, but it might change again, so the segment that handled transparency on mouseover lives here as comment for now
             //Handling transparency on mouseover
@@ -725,7 +846,7 @@ void RenderTimerWindow()
             if (numberTexture)
             {
                 ImGui::SetNextWindowBgAlpha(0.0f);
-                ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.42f, TimerPos.y + Settings::TimerScale * 0.68f), ImGuiCond_Always);
+                ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.42f, TimerPos.y + Settings::TimerScale * 1.292f), ImGuiCond_Always);
                 ImGui::SetNextWindowSize(ImVec2(TimerSize));
 
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -736,7 +857,7 @@ void RenderTimerWindow()
                 char timerStr[8]; // 7 Zeichen + null-Terminator
                 snprintf(timerStr, sizeof(timerStr), "%02lu%02lu%03lu", minutes, seconds, milliseconds);
 
-                int digitRow = timerRunning ? 0 : (timerPaused ? 4 : 2); // Handling the choice of the row from where to pick a digit on the sprite sheet
+                int digitRow = timerRunning ? 0 : (timerPaused ? 4 : ((Settings::optionCustom && (!timerStartSet || !timerFinishSet || !timerStartEntered)) ? 3 : 2)); // Handling the choice of the row from where to pick a digit on the sprite sheet
 
                 // Calculating which digits to pick for the minutes from the sprite-sheet and where they are to be displayed. Two digits, followed by a ":". The first digit is directly placed at the top left of the window, the following digits and the signs inbetween get carefully placed in accordance by means of imgui::sameline instructions
                 for (int i = 0; i < 2; i++)
@@ -817,6 +938,42 @@ void RenderTimerWindow()
                 ImGui::PopStyleVar(2);
             }
 
+            // Setting up the mode displays on the Timer
+            if (!timerindicatorTexture)
+            {
+                timerindicatorTexture = APIDefs->Textures.GetOrCreateFromResource("timer_indicators", timer_indicators, hSelf);
+            }
+            if (timerindicatorTexture)
+            {
+                ImGui::SetNextWindowBgAlpha(0.0f);
+                ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.0f, TimerPos.y + Settings::TimerScale * 0.0f), ImGuiCond_Always);
+                ImGui::SetNextWindowSize(ImVec2(TimerSize));
+
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+                ImGui::Begin("Timer Modes", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+
+                int timerindicatorFrame = Settings::optionManual ? 1 : 0; // Picking a specific frame from the sprite sheet based on settings - count starts from 0 for frame 1
+                int timerindicatornumCols = 3; // Number of colums of the sprite sheet
+                int timerindicatornumRows = 1; // Number of rows of the sprite sheet
+                int timerindicatorframeCol = timerindicatorFrame % timerindicatornumCols; // Calculating the active column
+                int timerindicatorframeRow = timerindicatorFrame / timerindicatornumCols; // Calculating the active row
+                float timerindicatorframeWidth = 1.0f / static_cast<float>(timerindicatornumCols); // Calculating the width of each frame
+                float timerindicatorframeHeight = 1.0f / static_cast<float>(timerindicatornumRows); // Calculating the height of each frame
+
+                ImVec2 timerindicatorUV0(timerindicatorframeCol * timerindicatorframeWidth, timerindicatorframeRow * timerindicatorframeHeight); // Calculating upper left pixel coordinate of the frame
+                ImVec2 timerindicatorUV1((timerindicatorframeCol + 1) * timerindicatorframeWidth, (timerindicatorframeRow + 1) * timerindicatorframeHeight); // Calculating lower right pixel coordinate of the frame
+
+                ImVec2 timerindicatorPos = ImVec2(TimerPos.x + Settings::TimerScale * 1.71f, TimerPos.y + Settings::TimerScale * 0.165f); // Positioning relative to the Timer position
+                ImVec2 timerindicatorSize = ImVec2(TimerSize.x * 0.34f, TimerSize.y * 0.31f); // Size scaling relative to Timer size
+
+                ImGui::SetCursorScreenPos(timerindicatorPos);
+                ImGui::Image(timerindicatorTexture->Resource, timerindicatorSize, timerindicatorUV0, timerindicatorUV1, ImVec4(1, 1, 1, timerimageAlpha)); // Drawing the frame from the sprite sheet
+
+                ImGui::End();
+                ImGui::PopStyleVar(2);
+            }
+
             // Setting up ImGui Window for the clickable stopwatch on the timer widget
             if (!stopwatchTexture)
             {
@@ -825,7 +982,7 @@ void RenderTimerWindow()
             if (stopwatchTexture)
             {
                 ImGui::SetNextWindowBgAlpha(0.0f);
-                ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 4.10f, TimerPos.y + Settings::TimerScale * 0.1f), ImGuiCond_Always);
+                ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 4.15f, TimerPos.y + Settings::TimerScale * 0.78f), ImGuiCond_Always);
                 ImGui::SetNextWindowSize(ImVec2(TimerSize.x * 0.18, TimerSize.y * 0.79));
 
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -833,33 +990,73 @@ void RenderTimerWindow()
                 ImGui::Begin("Timer Stopwatch", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
                 // Setting up an invisible button that sits in front of the stopwatch
-                ImGui::InvisibleButton("stopwatch_button", ImVec2((TimerSize.x + 3.0f) * 0.18, TimerSize.y * 0.79));
+                ImGui::InvisibleButton("stopwatch_button", ImVec2(TimerSize.x * 0.17, TimerSize.y * 0.54));
                 if (ImGui::IsItemClicked())
                 {
                     Vector3 currentPos = MumbleLink->AvatarPosition;
 
                     // First click while the timer is running pauses it and stores the elapsed time, so that the timer may resume running from there if triggered again
-                    if (!timerPaused && timerRunning)
+                    if (Settings::optionManual)
                     {
-                        double currElapsed = static_cast<double>(current.QuadPart - timerStart.QuadPart) / frequency.QuadPart;
-                        if (currElapsed > 0.0)
+                        if (!timerPaused && timerRunning)
                         {
-                            timerPaused = true;
-                            pausedElapsedSeconds = currElapsed;
-                            timerRunning = false;
-                            pausePos = currentPos;
+                            double currElapsed = static_cast<double>(current.QuadPart - timerStart.QuadPart) / frequency.QuadPart;
+                            if (currElapsed > 0.0)
+                            {
+                                timerPaused = true;
+                                pausedElapsedSeconds = currElapsed;
+                                timerRunning = false;
+                                pausePos = currentPos;
+                            }
                         }
-                    }
 
-                    // If the timer is paused, a second click will reset it and also set the base coordinates directly at the feet of the player character
-                    else if (timerPaused)
-                    {
-                        if (pausedElapsedSeconds > 0.0)
+                        // If the timer is paused, a second click will reset it and also set the base coordinates directly at the feet of the player character
+                        else if (timerPaused)
+                        {
+                            if (pausedElapsedSeconds > 0.0)
+                            {
+                                timerPaused = false;
+                                timerRunning = false;
+                                pausedElapsedSeconds = 0.0;
+                                basePos = currentPos;
+                            }
+                        }
+                        else
                         {
                             timerPaused = false;
                             timerRunning = false;
                             pausedElapsedSeconds = 0.0;
                             basePos = currentPos;
+                        }
+                    }
+                    if (Settings::optionCustom)
+                    {
+                        if (timerHotkeyCount == 4)
+                        {
+                            timerHotkeyCount = 1;
+                        }
+                        if (timerHotkeyCount == 3)
+                        {
+                            timerFinishSet = false;
+                            timerStartSet = false;
+                            timerPaused = false;
+                            timerRunning = false;
+                            timerStartEntered = false;
+                            basePos = { -10000.0f, -10000.0f, -10000.0f };
+                            pausePos = { -10000.0f, -10000.0f, -10000.0f };
+                            timerHotkeyCount = 4;
+                        }
+                        if (timerHotkeyCount == 2)
+                        {
+                            timerFinishSet = true;
+                            pausePos = currentPos;
+                            timerHotkeyCount = 3;
+                        }
+                        if (timerHotkeyCount == 1)
+                        {
+                            timerStartSet = true;
+                            basePos = currentPos;
+                            timerHotkeyCount = 2;
                         }
                     }
                 }
@@ -899,8 +1096,8 @@ void RenderTimerWindow()
                 float timerframeHeight = 1.0f / static_cast<float>(timernumRows); // Calculating the height of a single frame based on the number of rows on the sheet
                 ImVec2 timerUV0(timerframeCol * timerframeWidth, timerframeRow * timerframeHeight); // Calculating the top left pixel of the frame to draw 
                 ImVec2 timerUV1((timerframeCol + 1) * timerframeWidth, (timerframeRow + 1) * timerframeHeight); // Calculating the bottom right pixel of the frame to draw 
-                ImVec2 stopwatchPos = ImVec2(TimerPos.x + Settings::TimerScale * 4.10f, TimerPos.y + Settings::TimerScale * 0.16f); // Location of the stopwatch on screen, relative to the timer position and scale
-                ImVec2 stopwatchSize = ImVec2(TimerSize.x * 0.19f, TimerSize.y * 0.72f); // Size of the stopwatch on screen, relative to the timer scale
+                ImVec2 stopwatchPos = ImVec2(TimerPos.x + Settings::TimerScale * 4.10f, TimerPos.y + Settings::TimerScale * 0.755f); // Location of the stopwatch on screen, relative to the timer position and scale
+                ImVec2 stopwatchSize = ImVec2(TimerSize.x * 0.19f, TimerSize.y * 0.54f); // Size of the stopwatch on screen, relative to the timer scale
                 ImGui::SetCursorScreenPos(stopwatchPos);
                 ImGui::Image(stopwatchTexture->Resource, stopwatchSize, timerUV0, timerUV1, ImVec4(1, 1, 1, timerimageAlpha));
 
@@ -909,7 +1106,6 @@ void RenderTimerWindow()
             }
         }
     }
-    //style.WindowBorderSize = oldBorderSize;
 }
 
 // Main function for the rendering of the Speedometer as well as calling the functions related to the calculations of the speedometer, the timer and the rendering of the latter
@@ -919,10 +1115,6 @@ void AddonRender()
 
     UpdateTimer();
     RenderTimerWindow();
-
-    //ImGuiStyle& style = ImGui::GetStyle();
-    //float oldBorderSize = style.WindowBorderSize;
-    //style.WindowBorderSize = 0.0f;
 
     if (NexusLink && MumbleLink && MumbleIdentity && !MumbleLink->Context.IsMapOpen && NexusLink->IsGameplay)
     {
@@ -1197,7 +1389,7 @@ void AddonRender()
             if (numberTexture)
             {
                 ImGui::SetNextWindowBgAlpha(0.0f);
-                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 3.54f, speedometerPos.y + Settings::DialScale * 1.53f), ImGuiCond_Always);
+                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 3.58f, speedometerPos.y + Settings::DialScale * 1.53f), ImGuiCond_Always);
                 ImGui::SetNextWindowSize(ImVec2(dialSize));
 
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -1233,15 +1425,15 @@ void AddonRender()
                     ImVec2 digitUV0(digit * digitWidth, digitRow * digitHeight); // Calculating upper left pixel coordinate of the frame
                     ImVec2 digitUV1((digit + 1) * digitWidth, (digitRow + 1) * digitHeight); // Calculating lower right pixel coordinate of the frame
 
-                    ImGui::Image(numberTexture->Resource, ImVec2(Settings::DialScale * 0.46f, Settings::DialScale * 0.68f), digitUV0, digitUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
+                    ImGui::Image(numberTexture->Resource, ImVec2(Settings::DialScale * 0.45f, Settings::DialScale * 0.69f), digitUV0, digitUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
 
                     // Calculating offsets to place the last three numbers relative to the first
                     if (i == 0)
-                        ImGui::SameLine(Settings::DialScale * 0.406f, 0.0f);
+                        ImGui::SameLine(Settings::DialScale * 0.396f, 0.0f);
                     if (i == 1)
-                        ImGui::SameLine(Settings::DialScale * 0.816f, 0.0f);
+                        ImGui::SameLine(Settings::DialScale * 0.786f, 0.0f);
                     if (i == 2)
-                        ImGui::SameLine(Settings::DialScale * 1.226f, 0.0f);
+                        ImGui::SameLine(Settings::DialScale * 1.176f, 0.0f);
                 }
                 ImGui::End();
                 ImGui::PopStyleVar(2);
@@ -1449,8 +1641,8 @@ void AddonRender()
             ImGui::PopStyleVar(2);
         }
     }
+
     // segment displays Mumble API values from the Identity category. I am interested in this as i may need the world ID value specifically at a later date, but it is of no value for the user, so it lives here as a comment.
-    /*
     ImGui::SetNextWindowBgAlpha(0.35f);
     ImGui::SetNextWindowPos(ImVec2(100, 100));
     ImGui::SetNextWindowSize(ImVec2(150, 300));
@@ -1499,9 +1691,6 @@ void AddonRender()
         }
     }
     ImGui::End();
-    */
-
-    //style.WindowBorderSize = oldBorderSize;
 }
 
 // Handling the keybind that toggles the Speedometer
@@ -1655,7 +1844,6 @@ void AddonOptions()
         ImGui::EndTooltip();
     }
 
-    ImGui::Separator();
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Set the unit that velocity gets measured in:");
     if (ImGui::Checkbox("u/s", &Settings::optionUnits)) {
         if (Settings::optionUnits) { Settings::optionFeetPercent = false; Settings::optionBeetlePercent = false; }
@@ -1702,7 +1890,6 @@ void AddonOptions()
         ImGui::EndTooltip();
     }
 
-    ImGui::Separator();
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to set the maximum needle amplitude per measuring unit:");
     if (ImGui::DragFloat("Set between 50 and 3000", &Settings::amplitudeUnits, 1.0f, 50.0f, 3000.0f, "%.1f u/s"))
     {
@@ -1757,10 +1944,203 @@ void AddonOptions()
             basePosInitialized = false;
         }
     }
+
+    ImGui::Separator();
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Timer mode settings:");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Choose the mode of the Timer:");
+    if (ImGui::Checkbox("Manual", &Settings::optionManual))
+    {
+        if (Settings::optionManual)
+        {
+            Settings::optionPredefined = false; Settings::optionCustom = false;
+
+            timerRunning = false;
+            timerPaused = false;
+            basePosInitialized = false;
+        }
+        if (!Settings::optionManual)
+        {
+            Settings::optionCustom = true;
+
+            basePosInitialized = false;
+
+            timerFinishSet = false;
+            timerStartSet = false;
+            timerPaused = false;
+            timerRunning = false;
+            timerStartEntered = false;
+            basePos = { -10000.0f, -10000.0f, -10000.0f };
+            basePosInitialized = false;
+            pausePos = { -10000.0f, -10000.0f, -10000.0f };
+            timerHotkeyCount = 4;
+        }
+        Settings::Settings[IS_OPTION_MANUAL_ENABLED] = Settings::optionManual;
+        Settings::Settings[IS_OPTION_PREDEFINED_ENABLED] = Settings::optionPredefined;
+        Settings::Settings[IS_OPTION_CUSTOM_ENABLED] = Settings::optionCustom;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Manual Timer, starting location is set upon activation or reset, and the Timer can be paused and reset at will.");
+        ImGui::EndTooltip();
+    }
+
+    /*
+    ImGui::SameLine(200.0f, 0.0f);
+    if (ImGui::Checkbox("Predefined", &Settings::optionPredefined))
+    {
+        if (Settings::optionPredefined)
+        {
+            Settings::optionManual = false; Settings::optionCustom = false;
+        }
+        if (!Settings::optionPredefined)
+        {
+            Settings::optionManual = true;
+        }
+        Settings::Settings[IS_OPTION_MANUAL_ENABLED] = Settings::optionManual;
+        Settings::Settings[IS_OPTION_PREDEFINED_ENABLED] = Settings::optionPredefined;
+        Settings::Settings[IS_OPTION_CUSTOM_ENABLED] = Settings::optionCustom;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Predefined Timer, starting locations are set per map and resetting is only possible by returning to them.");
+        ImGui::EndTooltip();
+    }
+    */
+
+    ImGui::SameLine(200.0f, 0.0f);
+    if (ImGui::Checkbox("Custom", &Settings::optionCustom))
+    {
+        if (Settings::optionCustom)
+        {
+            Settings::optionManual = false; Settings::optionPredefined = false;
+
+            timerFinishSet = false;
+            timerStartSet = false;
+            timerPaused = false;
+            timerRunning = false;
+            timerStartEntered = false;
+            basePos = { -10000.0f, -10000.0f, -10000.0f };
+            basePosInitialized = false;
+            pausePos = { -10000.0f, -10000.0f, -10000.0f };
+            timerHotkeyCount = 4;
+        }
+        if (!Settings::optionCustom)
+        {
+            Settings::optionManual = true;
+
+            timerRunning = false;
+            timerPaused = false;
+            basePosInitialized = false;
+        }
+        Settings::Settings[IS_OPTION_MANUAL_ENABLED] = Settings::optionManual;
+        Settings::Settings[IS_OPTION_PREDEFINED_ENABLED] = Settings::optionPredefined;
+        Settings::Settings[IS_OPTION_CUSTOM_ENABLED] = Settings::optionCustom;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Custom Timer, you can set your own start and finish locations by using the Pause keybind or clicking the stopwatch.");
+        ImGui::EndTooltip();
+    }
+
+    ImGui::Separator();
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Manual Timer settings:");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Choose if pausing the timer is temporary or final");
+    if (ImGui::Checkbox("Temporary", &Settings::optionPause))
+    {
+        if (Settings::optionPause) Settings::optionStop = false;
+        if (!Settings::optionPause) Settings::optionStop = true;
+        Settings::Settings[IS_OPTION_PAUSE_ENABLED] = Settings::optionPause;
+        Settings::Settings[IS_OPTION_STOP_ENABLED] = Settings::optionStop;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "If paused, the Timer will resume on movement. Pausing only works when standing still.");
+        ImGui::EndTooltip();
+    }
+    ImGui::SameLine(200.0f, 0.0f);
+    if (ImGui::Checkbox("Final", &Settings::optionStop))
+    {
+        if (Settings::optionStop) Settings::optionPause = false;
+        if (!Settings::optionStop) Settings::optionPause = true;
+        Settings::Settings[IS_OPTION_PAUSE_ENABLED] = Settings::optionPause;
+        Settings::Settings[IS_OPTION_STOP_ENABLED] = Settings::optionStop;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "If paused, the Timer will be stopped and cannot resume. Reset required to start again.");
+        ImGui::EndTooltip();
+    }
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to set the manual start location radius in units:");
+    if (ImGui::DragFloat("Set manual start radius between 18 and 900 units", &Settings::manualstartDiameter, 1.0f, 18.0f, 900.0f, "%.1f units"))
+    {
+        Settings::Settings[MANUAL_START_DIAMETER_UNITS] = Settings::manualstartDiameter;
+        Settings::Save(SettingsPath);
+    }
+
+    ImGui::Separator();
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Custom Timer settings");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to set the start and finish location radii in units:");
+    if (ImGui::DragFloat("Set start radius between 18 and 900 units", &Settings::startDiameter, 1.0f, 18.0f, 900.0f, "%.1f units"))
+    {
+        Settings::Settings[START_DIAMETER_UNITS] = Settings::startDiameter;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::DragFloat("Set finish radius between 120 and 900 units", &Settings::finishDiameter, 1.0f, 120.0f, 900.0f, "%.1f units%"))
+    {
+        Settings::Settings[FINISH_DIAMETER_UNITS] = Settings::finishDiameter;
+        Settings::Save(SettingsPath);
+    }
+    /*
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to adjust the offset of the start location in 3D space:");
+    if (ImGui::DragFloat("Set start location X (west-east axis) offset between -1200 and 1200", &Settings::startXoffset, 1.0f, -1200.0f, 1200.0f, "%.1f units X"))
+    {
+        Settings::Settings[START_X_OFFSET] = Settings::startXoffset;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::DragFloat("Set start location Z (north-south axis) offset between -1200 and 1200", &Settings::startZoffset, 1.0f, -1200.0f, 1200.0f, "%.1f units Z"))
+    {
+        Settings::Settings[START_Z_OFFSET] = Settings::startZoffset;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::DragFloat("Set start location Y (height) offset between -300 and 300", &Settings::startYoffset, 1.0f, -300.0f, 300.0f, "%.1f units Y"))
+    {
+        Settings::Settings[START_Y_OFFSET] = Settings::startYoffset;
+        Settings::Save(SettingsPath);
+    }
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to adjust the offset of the finish location in 3D space:");
+    if (ImGui::DragFloat("Set finish location X (west-east axis) offset between -1200 and 1200", &Settings::finishXoffset, 1.0f, -1200.0f, 1200.0f, "%.1f units X"))
+    {
+        Settings::Settings[FINISH_X_OFFSET] = Settings::finishXoffset;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::DragFloat("Set finish location Z (north-south axis) offset between -1200 and 1200", &Settings::finishZoffset, 1.0f, -1200.0f, 1200.0f, "%.1f units Z"))
+    {
+        Settings::Settings[FINISH_Z_OFFSET] = Settings::finishZoffset;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::DragFloat("Set finish location Y (height) offset between -1200 and 1200", &Settings::finishYoffset, 1.0f, -300.0f, 300.0f, "%.1f units Y"))
+    {
+        Settings::Settings[FINISH_Y_OFFSET] = Settings::finishYoffset;
+        Settings::Save(SettingsPath);
+    }
+    */
     ImGui::Separator();
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Timer location and size:");
-    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to move and scale the Timer to your preferences:");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Use the sliders to adjust the position and scale of the Timer:");
     if (ImGui::SliderFloat("hPos Timer", &Settings::TimerPositionH, NexusLink->Width * 0.0f, NexusLink->Width * 1.0f, "%.0f X%"))
     {
         Settings::Settings[SPEEDOMETER_TIMER_POSITION_H] = Settings::TimerPositionH;
@@ -1807,6 +2187,23 @@ void AddonOptions()
 
         Settings::IsTimerEnabled = true;
 
+        Settings::optionPause = true;
+        Settings::optionStop = false;
+        Settings::manualstartDiameter = 18.0f;
+
+        Settings::optionManual = true;
+        Settings::optionPredefined = false;
+        Settings::optionCustom = false;
+
+        Settings::startDiameter = 120.0f;
+        Settings::finishDiameter = 240.0f;
+        Settings::startXoffset = 0.0f;
+        Settings::startZoffset = 0.0f;
+        Settings::startYoffset = 0.0f;
+        Settings::finishXoffset = 0.0f;
+        Settings::finishZoffset = 0.0f;
+        Settings::finishYoffset = 0.0f;
+
         Settings::TimerPositionH = 250.0f;
         Settings::TimerPositionV = 100.0f;
         Settings::TimerScale = 60.0f;
@@ -1827,8 +2224,21 @@ void AddonOptions()
         Settings::Settings[SPEEDOMETER_DIAL_POSITION_H] = Settings::DialPositionH;
         Settings::Settings[SPEEDOMETER_DIAL_POSITION_V] = Settings::DialPositionV;
         Settings::Settings[SPEEDOMETER_DIAL_SCALE] = Settings::DialScale;
-
         Settings::Settings[IS_SPEEDOMETER_TIMER_VISIBLE] = Settings::IsTimerEnabled;
+        Settings::Settings[IS_OPTION_PAUSE_ENABLED] = Settings::optionPause;
+        Settings::Settings[IS_OPTION_STOP_ENABLED] = Settings::optionStop;
+        Settings::Settings[MANUAL_START_DIAMETER_UNITS] = Settings::manualstartDiameter;
+        Settings::Settings[IS_OPTION_MANUAL_ENABLED] = Settings::optionManual;
+        Settings::Settings[IS_OPTION_PREDEFINED_ENABLED] = Settings::optionPredefined;
+        Settings::Settings[IS_OPTION_CUSTOM_ENABLED] = Settings::optionCustom;
+        Settings::Settings[START_DIAMETER_UNITS] = Settings::startDiameter;
+        Settings::Settings[FINISH_DIAMETER_UNITS] = Settings::finishDiameter;
+        Settings::Settings[START_X_OFFSET] = Settings::startXoffset;
+        Settings::Settings[START_Z_OFFSET] = Settings::startZoffset;
+        Settings::Settings[START_Y_OFFSET] = Settings::startYoffset;
+        Settings::Settings[FINISH_X_OFFSET] = Settings::finishXoffset;
+        Settings::Settings[FINISH_Z_OFFSET] = Settings::finishZoffset;
+        Settings::Settings[FINISH_Y_OFFSET] = Settings::finishYoffset;
         Settings::Settings[SPEEDOMETER_TIMER_POSITION_H] = Settings::TimerPositionH;
         Settings::Settings[SPEEDOMETER_TIMER_POSITION_V] = Settings::TimerPositionV;
         Settings::Settings[SPEEDOMETER_TIMER_SCALE] = Settings::TimerScale;

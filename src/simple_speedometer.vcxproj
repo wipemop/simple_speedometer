@@ -209,6 +209,7 @@
     <Image Include="speedometer_needle_blue.png" />
     <Image Include="speedometer_numbers2.png" />
     <Image Include="timer_background.png" />
+    <Image Include="timer_indicators.png" />
     <Image Include="timer_stopwatch.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

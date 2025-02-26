@@ -20,6 +20,20 @@ const char* SPEEDOMETER_DIAL_POSITION_H = "SpeedometerDialPositionH";
 const char* SPEEDOMETER_DIAL_POSITION_V = "SpeedometerDialPositionV";
 const char* SPEEDOMETER_DIAL_SCALE = "SpeedometerDialScale";
 const char* IS_SPEEDOMETER_TIMER_VISIBLE = "IsSpeedometerTimerVisible";
+const char* IS_OPTION_PAUSE_ENABLED = "IsOptionPauseEnabled";
+const char* IS_OPTION_STOP_ENABLED = "IsOptionStopEnabled";
+const char* MANUAL_START_DIAMETER_UNITS = "ManualStartDiameterUnits";
+const char* IS_OPTION_MANUAL_ENABLED = "IsOptionManualEnabled";
+const char* IS_OPTION_PREDEFINED_ENABLED = "IsOptionPredefinedEnabled";
+const char* IS_OPTION_CUSTOM_ENABLED = "IsOptionCustomEnabled";
+const char* START_DIAMETER_UNITS = "StartDiameterUnits";
+const char* FINISH_DIAMETER_UNITS = "FinishDiameterUnits";
+const char* START_X_OFFSET = "StartXOffset";
+const char* START_Z_OFFSET = "StartZOffset";
+const char* START_Y_OFFSET = "StartYOffset";
+const char* FINISH_X_OFFSET = "FinishXOffset";
+const char* FINISH_Z_OFFSET = "FinishZOffset";
+const char* FINISH_Y_OFFSET = "FinishYOffset";
 const char* SPEEDOMETER_TIMER_POSITION_H = "SpeedometerTimerPositionH";
 const char* SPEEDOMETER_TIMER_POSITION_V = "SpeedometerTimerPositionV";
 const char* SPEEDOMETER_TIMER_SCALE = "SpeedometerTimerScale";
@@ -111,6 +125,62 @@ namespace Settings
 		{
 			Settings[IS_SPEEDOMETER_TIMER_VISIBLE].get_to<bool>(IsTimerEnabled);
 		}
+		if (!Settings[IS_OPTION_PAUSE_ENABLED].is_null())
+		{
+			Settings[IS_OPTION_PAUSE_ENABLED].get_to<bool>(optionPause);
+		}
+		if (!Settings[IS_OPTION_STOP_ENABLED].is_null())
+		{
+			Settings[IS_OPTION_STOP_ENABLED].get_to<bool>(optionStop);
+		}
+		if (!Settings[MANUAL_START_DIAMETER_UNITS].is_null())
+		{
+			Settings[MANUAL_START_DIAMETER_UNITS].get_to<float>(manualstartDiameter);
+		}
+		if (!Settings[IS_OPTION_MANUAL_ENABLED].is_null())
+		{
+			Settings[IS_OPTION_MANUAL_ENABLED].get_to<bool>(optionManual);
+		}
+		if (!Settings[IS_OPTION_PREDEFINED_ENABLED].is_null())
+		{
+			Settings[IS_OPTION_PREDEFINED_ENABLED].get_to<bool>(optionPredefined);
+		}
+		if (!Settings[IS_OPTION_CUSTOM_ENABLED].is_null())
+		{
+			Settings[IS_OPTION_CUSTOM_ENABLED].get_to<bool>(optionCustom);
+		}
+		if (!Settings[START_DIAMETER_UNITS].is_null())
+		{
+			Settings[START_DIAMETER_UNITS].get_to<float>(startDiameter);
+		}
+		if (!Settings[FINISH_DIAMETER_UNITS].is_null())
+		{
+			Settings[FINISH_DIAMETER_UNITS].get_to<float>(finishDiameter);
+		}
+		if (!Settings[START_X_OFFSET].is_null())
+		{
+			Settings[START_X_OFFSET].get_to<float>(startXoffset);
+		}
+		if (!Settings[START_Z_OFFSET].is_null())
+		{
+			Settings[START_Z_OFFSET].get_to<float>(startZoffset);
+		}
+		if (!Settings[START_Y_OFFSET].is_null())
+		{
+			Settings[START_Y_OFFSET].get_to<float>(startYoffset);
+		}
+		if (!Settings[FINISH_X_OFFSET].is_null())
+		{
+			Settings[FINISH_X_OFFSET].get_to<float>(finishXoffset);
+		}
+		if (!Settings[FINISH_Z_OFFSET].is_null())
+		{
+			Settings[FINISH_Z_OFFSET].get_to<float>(finishZoffset);
+		}
+		if (!Settings[FINISH_Y_OFFSET].is_null())
+		{
+			Settings[FINISH_Y_OFFSET].get_to<float>(finishYoffset);
+		}
 		if (!Settings[SPEEDOMETER_TIMER_POSITION_H].is_null())
 		{
 			Settings[SPEEDOMETER_TIMER_POSITION_H].get_to<float>(TimerPositionH);
@@ -165,6 +235,20 @@ namespace Settings
 	float DialPositionV = 250.0f;
 	float DialScale = 60.0f;
 	bool IsTimerEnabled = true;
+	bool optionPause = true;
+	bool optionStop = false;
+	float manualstartDiameter = 18.0f;
+	bool optionManual = true;
+	bool optionPredefined = false;
+	bool optionCustom = false;
+	float startDiameter = 120.0f;
+	float finishDiameter = 240.0f;
+	float startXoffset = 0.0f;
+	float startZoffset = 0.0f;
+	float startYoffset = 0.0f;
+	float finishXoffset = 0.0f;
+	float finishZoffset = 0.0f;
+	float finishYoffset = 0.0f;
 	float TimerPositionH = 250.0f;
 	float TimerPositionV = 100.0f;
 	float TimerScale = 60.0f;
