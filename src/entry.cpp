@@ -1839,7 +1839,7 @@ void AddonOptions()
     }
 
     ImGui::SameLine(200.0f, 0.0f);
-    if (ImGui::Checkbox("Show velocity chart", &Settings::IsTableEnabled))
+    if (ImGui::Checkbox("Show data chart", &Settings::IsTableEnabled))
     {
         if (!Settings::IsDialEnabled) Settings::IsDialEnabled = true;
         Settings::Settings[IS_SPEEDOMETER_DIAL_VISIBLE] = Settings::IsDialEnabled;
@@ -1849,7 +1849,7 @@ void AddonOptions()
     if (ImGui::IsItemHovered())
     {
         ImGui::BeginTooltip();
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "This only exists to provide a quick glance at all possible velocity values and your distance to the start circle border.");
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "This chart only exists to provide a quick glance at all possible velocity values and your distance to the start circle border.");
         ImGui::EndTooltip();
     }
 
