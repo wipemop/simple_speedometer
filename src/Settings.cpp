@@ -20,6 +20,8 @@ const char* SPEEDOMETER_DIAL_POSITION_H = "SpeedometerDialPositionH";
 const char* SPEEDOMETER_DIAL_POSITION_V = "SpeedometerDialPositionV";
 const char* SPEEDOMETER_DIAL_SCALE = "SpeedometerDialScale";
 const char* IS_SPEEDOMETER_TIMER_VISIBLE = "IsSpeedometerTimerVisible";
+const char* START_FADING_DISTANCE = "StartFadingDistance";
+const char* FINISH_FADING_DISTANCE = "FinishFadingDistance";
 const char* IS_OPTION_PAUSE_ENABLED = "IsOptionPauseEnabled";
 const char* IS_OPTION_STOP_ENABLED = "IsOptionStopEnabled";
 const char* MANUAL_START_DIAMETER_UNITS = "ManualStartDiameterUnits";
@@ -124,6 +126,14 @@ namespace Settings
 		if (!Settings[IS_SPEEDOMETER_TIMER_VISIBLE].is_null())
 		{
 			Settings[IS_SPEEDOMETER_TIMER_VISIBLE].get_to<bool>(IsTimerEnabled);
+		}
+		if (!Settings[START_FADING_DISTANCE].is_null())
+		{
+			Settings[START_FADING_DISTANCE].get_to<float>(startFadingDistance);
+		}
+		if (!Settings[FINISH_FADING_DISTANCE].is_null())
+		{
+			Settings[FINISH_FADING_DISTANCE].get_to<float>(finishFadingDistance);
 		}
 		if (!Settings[IS_OPTION_PAUSE_ENABLED].is_null())
 		{
@@ -235,14 +245,16 @@ namespace Settings
 	float DialPositionV = 250.0f;
 	float DialScale = 60.0f;
 	bool IsTimerEnabled = true;
+	float startFadingDistance = 1200.0f;
+	float finishFadingDistance = 1200.0f;
 	bool optionPause = true;
 	bool optionStop = false;
 	float manualstartDiameter = 18.0f;
 	bool optionManual = true;
 	bool optionPredefined = false;
 	bool optionCustom = false;
-	float startDiameter = 120.0f;
-	float finishDiameter = 240.0f;
+	float startDiameter = 100.0f;
+	float finishDiameter = 200.0f;
 	float startXoffset = 0.0f;
 	float startZoffset = 0.0f;
 	float startYoffset = 0.0f;

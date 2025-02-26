@@ -23,6 +23,8 @@ extern const char* SPEEDOMETER_DIAL_POSITION_H;
 extern const char* SPEEDOMETER_DIAL_POSITION_V;
 extern const char* SPEEDOMETER_DIAL_SCALE;
 extern const char* IS_SPEEDOMETER_TIMER_VISIBLE;
+extern const char* START_FADING_DISTANCE;
+extern const char* FINISH_FADING_DISTANCE;
 extern const char* IS_OPTION_PAUSE_ENABLED;
 extern const char* IS_OPTION_STOP_ENABLED;
 extern const char* MANUAL_START_DIAMETER_UNITS;
@@ -70,6 +72,8 @@ namespace Settings
 	extern float DialPositionV;
 	extern float DialScale;
 	extern bool IsTimerEnabled;
+	extern float startFadingDistance;
+	extern float finishFadingDistance;
 	extern bool optionPause;
 	extern bool optionStop;
 	extern float manualstartDiameter;

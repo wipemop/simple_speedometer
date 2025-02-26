@@ -575,20 +575,20 @@ void UpdateTimer()
         g_pausedistance = pausedistance;
 
         // Same as in RenderGroundCircle() but for the colored insides of the circles. Calculating the alpha value (= opacity of the circles) based on distance between player character and circle center. Clamping alpha to zero when max distance is exceeded
-        float startingcircleFadingStart = 160.0f;
-        float startingcircleFadingEnd = 200.0f;
+        float startingcircleFadingStart = (Settings::startFadingDistance + (Settings::optionCustom ? Settings::startDiameter : Settings::manualstartDiameter)) / conversionFactor_u_s;
+        float startingcircleFadingEnd = (Settings::startFadingDistance + (Settings::optionCustom ? Settings::startDiameter : Settings::manualstartDiameter)) / conversionFactor_u_s + 5.0f;
 
-        float selfclosestartFadingStart = Settings::startDiameter / conversionFactor_u_s + 7.0f;
+        float selfclosestartFadingStart = Settings::startDiameter / conversionFactor_u_s + 5.0f;
         float selfclosestartFadingEnd = Settings::startDiameter / conversionFactor_u_s + 10.0f;
 
-        float selfclosemanualstartFadingStart = Settings::manualstartDiameter / conversionFactor_u_s + 7.0f;
+        float selfclosemanualstartFadingStart = Settings::manualstartDiameter / conversionFactor_u_s + 5.0f;
         float selfclosemanualstartFadingEnd = Settings::manualstartDiameter / conversionFactor_u_s + 10.0f;
 
-        float finishcircleFadingStart = 160.0f;
-        float finishcircleFadingEnd = 200.0f;
+        float finishcircleFadingStart = (Settings::finishFadingDistance + (Settings::optionCustom ? Settings::finishDiameter : Settings::manualstartDiameter)) / conversionFactor_u_s;
+        float finishcircleFadingEnd = (Settings::finishFadingDistance + (Settings::optionCustom ? Settings::finishDiameter : Settings::manualstartDiameter)) / conversionFactor_u_s + 5.0f;
 
-        float selfclosefinishFadingStart = Settings::finishDiameter / conversionFactor_u_s + 25.0f;
-        float selfclosefinishFadingEnd = Settings::finishDiameter / conversionFactor_u_s + 30.0f;
+        float selfclosefinishFadingStart = Settings::finishDiameter / conversionFactor_u_s + 5.0f;
+        float selfclosefinishFadingEnd = Settings::finishDiameter / conversionFactor_u_s + 10.0f;
 
         // Calculating alpha value for transparency
         float startcirclealpha = 1.0f;
@@ -1495,17 +1495,16 @@ void AddonRender()
             //Setting up the velocity chart
             if (Settings::IsTableEnabled)
             {
-                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 5.42f - 250.0f, speedometerPos.y - 185.0f), ImGuiCond_Always);
-                ImGui::SetNextWindowSize(ImVec2(242.0f, 190.0f));
+                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 5.42f - 340.0f, speedometerPos.y - 200.0f), ImGuiCond_Always);
 
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-                ImGui::Begin("Velocity Chart", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+                ImGui::Begin("Data chart", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
                 ImGui::BeginTable("SpeedTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit);
-                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-                ImGui::TableSetupColumn("Unit", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                ImGui::TableSetupColumn("Unit", ImGuiTableColumnFlags_WidthFixed, 100.0f);
                 ImGui::TableHeadersRow();
 
                 auto AlignRight = [](const char* text) {
@@ -1527,7 +1526,8 @@ void AddonRender()
                     {"2D Vel.:", lastSpeed2D * conversionFactor_foot, "Feet%"},
                     {"3D Vel.:", lastSpeed3D * conversionFactor_foot, "Feet%"},
                     {"2D Vel.:", lastSpeed2D * conversionFactor_beetle, "Beetle%"},
-                    {"3D Vel.:", lastSpeed3D * conversionFactor_beetle, "Beetle%"}
+                    {"3D Vel.:", lastSpeed3D * conversionFactor_beetle, "Beetle%"},
+                    {"Distance:", ((g_basedistance + 0.381f) * conversionFactor_u_s - (Settings::optionCustom ? Settings::startDiameter : Settings::manualstartDiameter)), "units"}
                 };
 
                 for (const auto& entry : speedEntries)
@@ -1849,7 +1849,7 @@ void AddonOptions()
     if (ImGui::IsItemHovered())
     {
         ImGui::BeginTooltip();
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "This only exists to provide a quick glance at all possible velocity values in all units and dimensions at once.");
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "This only exists to provide a quick glance at all possible velocity values and your distance to the start circle border.");
         ImGui::EndTooltip();
     }
 
@@ -1985,6 +1985,17 @@ void AddonOptions()
             timerPaused = false;
             basePosInitialized = false;
         }
+    }
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to set the start and finish circle fading distances:");
+    if (ImGui::DragFloat("Start circle fading distance (300 - 10000 units)", &Settings::startFadingDistance, 5.0f, 300.0f, 10000.0f, "%.1f units"))
+    {
+        Settings::Settings[START_FADING_DISTANCE] = Settings::startFadingDistance;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::DragFloat("Finish circle fading distance (300 - 10000 units)", &Settings::finishFadingDistance, 5.0f, 300.0f, 10000.0f, "%.1f units"))
+    {
+        Settings::Settings[FINISH_FADING_DISTANCE] = Settings::finishFadingDistance;
+        Settings::Save(SettingsPath);
     }
 
     ImGui::Separator();
@@ -2125,7 +2136,7 @@ void AddonOptions()
         ImGui::EndTooltip();
     }
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to set the manual start location radius in units:");
-    if (ImGui::DragFloat("Set manual start radius between 18 and 900 units", &Settings::manualstartDiameter, 1.0f, 18.0f, 900.0f, "%.1f units"))
+    if (ImGui::DragFloat("Manual start and pause circle radii (18 - 900 units)", &Settings::manualstartDiameter, 1.0f, 18.0f, 900.0f, "%.1f units"))
     {
         Settings::Settings[MANUAL_START_DIAMETER_UNITS] = Settings::manualstartDiameter;
         Settings::Save(SettingsPath);
@@ -2135,12 +2146,12 @@ void AddonOptions()
     ImGui::Separator();
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Custom Timer settings");
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to set the start and finish location radii in units:");
-    if (ImGui::DragFloat("Set start radius between 18 and 900 units", &Settings::startDiameter, 1.0f, 18.0f, 900.0f, "%.1f units"))
+    if (ImGui::DragFloat("Custom start circle radius (18 - 900 units)", &Settings::startDiameter, 1.0f, 18.0f, 900.0f, "%.1f units"))
     {
         Settings::Settings[START_DIAMETER_UNITS] = Settings::startDiameter;
         Settings::Save(SettingsPath);
     }
-    if (ImGui::DragFloat("Set finish radius between 120 and 900 units", &Settings::finishDiameter, 1.0f, 120.0f, 900.0f, "%.1f units%"))
+    if (ImGui::DragFloat("Custom finish circle radius (60 - 900 units)", &Settings::finishDiameter, 1.0f, 60.0f, 900.0f, "%.1f units%"))
     {
         Settings::Settings[FINISH_DIAMETER_UNITS] = Settings::finishDiameter;
         Settings::Save(SettingsPath);
@@ -2228,6 +2239,8 @@ void AddonOptions()
         Settings::DialScale = 60.0f;
 
         Settings::IsTimerEnabled = true;
+        Settings::startFadingDistance = 1200.0f;
+        Settings::finishFadingDistance = 1200.0f;
 
         Settings::optionPause = true;
         Settings::optionStop = false;
@@ -2237,8 +2250,8 @@ void AddonOptions()
         Settings::optionPredefined = false;
         Settings::optionCustom = false;
 
-        Settings::startDiameter = 120.0f;
-        Settings::finishDiameter = 240.0f;
+        Settings::startDiameter = 100.0f;
+        Settings::finishDiameter = 200.0f;
         Settings::startXoffset = 0.0f;
         Settings::startZoffset = 0.0f;
         Settings::startYoffset = 0.0f;
@@ -2267,6 +2280,8 @@ void AddonOptions()
         Settings::Settings[SPEEDOMETER_DIAL_POSITION_V] = Settings::DialPositionV;
         Settings::Settings[SPEEDOMETER_DIAL_SCALE] = Settings::DialScale;
         Settings::Settings[IS_SPEEDOMETER_TIMER_VISIBLE] = Settings::IsTimerEnabled;
+        Settings::Settings[START_FADING_DISTANCE] = Settings::startFadingDistance;
+        Settings::Settings[FINISH_FADING_DISTANCE] = Settings::finishFadingDistance;
         Settings::Settings[IS_OPTION_PAUSE_ENABLED] = Settings::optionPause;
         Settings::Settings[IS_OPTION_STOP_ENABLED] = Settings::optionStop;
         Settings::Settings[MANUAL_START_DIAMETER_UNITS] = Settings::manualstartDiameter;
