@@ -22,7 +22,7 @@
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{9A8702C3-E6A3-440C-ADB8-9D12C93D15E1}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>arcdpscompass</RootNamespace>
+    <RootNamespace>simple_speedometer</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>Simple Speedometer</ProjectName>
   </PropertyGroup>
@@ -77,13 +77,13 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <TargetName>myFirstNexusAddon</TargetName>
+    <TargetName>simple_speedometer</TargetName>
     <OutDir>$(SolutionDir)$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)$(Platform)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <TargetName>compass</TargetName>
+    <TargetName>simple_speedometer</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
