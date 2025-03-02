@@ -22,6 +22,13 @@ const char* SPEEDOMETER_DIAL_SCALE = "SpeedometerDialScale";
 const char* IS_SPEEDOMETER_TIMER_VISIBLE = "IsSpeedometerTimerVisible";
 const char* START_FADING_DISTANCE = "StartFadingDistance";
 const char* FINISH_FADING_DISTANCE = "FinishFadingDistance";
+const char* CIRCLE_STYLE_FLAT = "CircleStyleFlat";
+const char* CIRCLE_STYLE_ARC = "CircleStyleArc";
+const char* CIRCLE_STYLE_RING = "CircleStyleRing";
+const char* TIMER_AUX_RIGHT_ALIGNED = "TimerAuxRightAligned";
+const char* TIMER_AUX_LEFT_ALIGNED = "TimerAuxLeftAligned";
+const char* TIMER_AUX_TOP_ALIGNED = "TimerAuxTopAligned";
+const char* TIMER_AUX_BOTTOM_ALIGNED = "TimerAuxBottomAligned";
 const char* IS_OPTION_PAUSE_ENABLED = "IsOptionPauseEnabled";
 const char* IS_OPTION_STOP_ENABLED = "IsOptionStopEnabled";
 const char* MANUAL_START_DIAMETER_UNITS = "ManualStartDiameterUnits";
@@ -30,6 +37,7 @@ const char* IS_OPTION_PREDEFINED_ENABLED = "IsOptionPredefinedEnabled";
 const char* IS_OPTION_CUSTOM_ENABLED = "IsOptionCustomEnabled";
 const char* START_DIAMETER_UNITS = "StartDiameterUnits";
 const char* FINISH_DIAMETER_UNITS = "FinishDiameterUnits";
+const char* PREDEF_TIMER_SET = "PredefTimerSet";
 const char* START_X_OFFSET = "StartXOffset";
 const char* START_Z_OFFSET = "StartZOffset";
 const char* START_Y_OFFSET = "StartYOffset";
@@ -60,9 +68,9 @@ namespace Settings
 			}
 			catch (json::parse_error& ex)
 			{
-				APIDefs->Log(ELogLevel_WARNING, "Compass", "Settings.json could not be parsed.");
-				APIDefs->Log(ELogLevel_WARNING, "Compass", ex.what());
-				APIDefs->Log(ELogLevel_DEBUG, "My First addon", "<c=#ff0000>Signing off</c>, it was an honor commander.");
+				APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Settings.json could not be parsed.");
+				APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", ex.what());
+				APIDefs->Log(ELogLevel_DEBUG, "Simple Speedometer", "I am no longer <c=#ff0000>speed</c>.");
 			}
 		}
 		Settings::Mutex.unlock();
@@ -135,6 +143,34 @@ namespace Settings
 		{
 			Settings[FINISH_FADING_DISTANCE].get_to<float>(finishFadingDistance);
 		}
+		if (!Settings[CIRCLE_STYLE_FLAT].is_null())
+		{
+			Settings[CIRCLE_STYLE_FLAT].get_to<bool>(optionFlat);
+		}
+		if (!Settings[CIRCLE_STYLE_ARC].is_null())
+		{
+			Settings[CIRCLE_STYLE_ARC].get_to<bool>(optionArc);
+		}
+		if (!Settings[CIRCLE_STYLE_RING].is_null())
+		{
+			Settings[CIRCLE_STYLE_RING].get_to<bool>(optionRing);
+		}
+		if (!Settings[TIMER_AUX_RIGHT_ALIGNED].is_null())
+		{
+			Settings[TIMER_AUX_RIGHT_ALIGNED].get_to<bool>(optionTimerRight);
+		}
+		if (!Settings[TIMER_AUX_LEFT_ALIGNED].is_null())
+		{
+			Settings[TIMER_AUX_LEFT_ALIGNED].get_to<bool>(optionTimerLeft);
+		}
+		if (!Settings[TIMER_AUX_TOP_ALIGNED].is_null())
+		{
+			Settings[TIMER_AUX_TOP_ALIGNED].get_to<bool>(optionTimerTop);
+		}
+		if (!Settings[TIMER_AUX_BOTTOM_ALIGNED].is_null())
+		{
+			Settings[TIMER_AUX_BOTTOM_ALIGNED].get_to<bool>(optionTimerBottom);
+		}
 		if (!Settings[IS_OPTION_PAUSE_ENABLED].is_null())
 		{
 			Settings[IS_OPTION_PAUSE_ENABLED].get_to<bool>(optionPause);
@@ -167,29 +203,9 @@ namespace Settings
 		{
 			Settings[FINISH_DIAMETER_UNITS].get_to<float>(finishDiameter);
 		}
-		if (!Settings[START_X_OFFSET].is_null())
+		if (!Settings[PREDEF_TIMER_SET].is_null())
 		{
-			Settings[START_X_OFFSET].get_to<float>(startXoffset);
-		}
-		if (!Settings[START_Z_OFFSET].is_null())
-		{
-			Settings[START_Z_OFFSET].get_to<float>(startZoffset);
-		}
-		if (!Settings[START_Y_OFFSET].is_null())
-		{
-			Settings[START_Y_OFFSET].get_to<float>(startYoffset);
-		}
-		if (!Settings[FINISH_X_OFFSET].is_null())
-		{
-			Settings[FINISH_X_OFFSET].get_to<float>(finishXoffset);
-		}
-		if (!Settings[FINISH_Z_OFFSET].is_null())
-		{
-			Settings[FINISH_Z_OFFSET].get_to<float>(finishZoffset);
-		}
-		if (!Settings[FINISH_Y_OFFSET].is_null())
-		{
-			Settings[FINISH_Y_OFFSET].get_to<float>(finishYoffset);
+			Settings[PREDEF_TIMER_SET].get_to<int>(selectedPredefSet);
 		}
 		if (!Settings[SPEEDOMETER_TIMER_POSITION_H].is_null())
 		{
@@ -220,13 +236,15 @@ namespace Settings
 		Settings::Mutex.unlock();
 	}
 
-	//void DoSomething(const char* aIdentifier, bool aIsRelease)
-	//{
-	//	if ((strcmp(aIdentifier, "KB_DO_SOMETHING") == 0) && !aIsRelease)
-	//	{
-	//
-	//	}
-	//}
+	/*
+	void DoSomething(const char* aIdentifier, bool aIsRelease)
+	{
+		if ((strcmp(aIdentifier, "KB_DO_SOMETHING") == 0) && !aIsRelease)
+		{
+	
+		}
+	}
+	*/
 
 	bool IsReadMeEnabled = false;
 	float ReadMePositionH = 450.0f;
@@ -241,28 +259,30 @@ namespace Settings
 	float amplitudeUnits = 391.0f;
 	float amplitudeFeetPercent = 100.0f;
 	float amplitudeBeetlePercent = 99.0f;
-	float DialPositionH = 250.0f;
-	float DialPositionV = 250.0f;
+	float DialPositionH = 320.0f;
+	float DialPositionV = 300.0f;
 	float DialScale = 60.0f;
 	bool IsTimerEnabled = true;
-	float startFadingDistance = 1200.0f;
-	float finishFadingDistance = 1200.0f;
+	float startFadingDistance = 2500.0f;
+	float finishFadingDistance = 2500.0f;
+	bool optionFlat = true;
+	bool optionArc = false;
+	bool optionRing = false;
 	bool optionPause = true;
 	bool optionStop = false;
+	bool optionTimerRight = true;
+	bool optionTimerLeft = false;
+	bool optionTimerTop = false;
+	bool optionTimerBottom = true;
 	float manualstartDiameter = 18.0f;
 	bool optionManual = true;
 	bool optionPredefined = false;
 	bool optionCustom = false;
 	float startDiameter = 100.0f;
 	float finishDiameter = 200.0f;
-	float startXoffset = 0.0f;
-	float startZoffset = 0.0f;
-	float startYoffset = 0.0f;
-	float finishXoffset = 0.0f;
-	float finishZoffset = 0.0f;
-	float finishYoffset = 0.0f;
-	float TimerPositionH = 250.0f;
-	float TimerPositionV = 100.0f;
+	int selectedPredefSet = 0;
+	float TimerPositionH = 260.0f;
+	float TimerPositionV = 560.0f;
 	float TimerScale = 60.0f;
 	bool restoreDefaults = false;
 }
