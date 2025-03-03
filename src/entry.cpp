@@ -1999,22 +1999,25 @@ void RenderTimerWindow()
                 {
                     ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 110.0f : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
                 }
-                ImGui::SetNextWindowSize(ImVec2(500, 105));
+                ImGui::SetNextWindowSize(ImVec2(500, 107));
 
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f); // Setzt die Randbreite auf 2 Pixel
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 2.0f));
                 ImGui::Begin("Set selection", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
                 ImGui::PushFont((ImFont*)fontptr);
 
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.0f, 1.0f), "Predefined Timer settings:");
+                ImGui::SameLine(382.0f, 0.0f);
+                ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "Set reload:");
 
-
-                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "External coordinate set load status:");
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Coordinate Sets - Status:");
                 ImGui::SameLine();
+                ImGui::AlignTextToFramePadding();
                 if (Coordinates::SetNames.empty() && !wasJsonMissing)
                 {
                     ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 0.6f), " INVALID");
@@ -2029,17 +2032,34 @@ void RenderTimerWindow()
                 }
                 else
                 {
-                    ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 0.6f), " Something unexpected went wrong. The developer is a monkey.");
+                    ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 0.6f), " The dev is a monkey.");
                 }
+
+                ImGui::SameLine(378.0f, 0.0f);
+
+
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));  // Standardfarbe der Box
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f)); // Farbe beim Hover
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));           // Textfarbe
+                if (ImGui::Button("Reload Sets"))
+                {
+                    if (std::filesystem::exists(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json")))
+                    {
+                        wasJsonMissing = false;
+                        Coordinates::Load(CoordinatesPath);
+                    }
+                }
+                ImGui::PopStyleColor(4); // Entfernt die 5 gesetzten Style-Änderungen
 
                 ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "Choose a coordinate set:");
 
                 if (!Coordinates::FilteredSetNames.empty())
                 {
 
-                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));  // Standardfarbe der Box
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.1f, 0.1f, 1.0f)); // Farbe beim Hover
-                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));  // Standardfarbe der Box
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f)); // Farbe beim Hover
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));      // Hintergrund des geschlossenen Dropdowns
                     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f)); // Hover-Farbe
                     ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));  // Aktive Farbe
@@ -2077,7 +2097,7 @@ void RenderTimerWindow()
                 }
                 else
                 {
-                    ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "No sets for this map ID available.");
+                    ImGui::TextColored(ImVec4(0.7f, 0.0f, 0.0f, 1.0f), "No sets for this map ID available.");
                 }
                 ImGui::PopFont();
 
@@ -2087,19 +2107,19 @@ void RenderTimerWindow()
 
                 if (Settings::optionTimerRight)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 150.0f, Settings::optionTimerTop ? TimerPos.y - 227.0f : TimerPos.y + Settings::TimerScale * 2.30f + 117.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 150.0f, Settings::optionTimerTop ? TimerPos.y - 222.0f : TimerPos.y + Settings::TimerScale * 2.30f + 121.0f), ImGuiCond_Always);
                 }
                 if (Settings::optionTimerLeft)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 227.0f : TimerPos.y + Settings::TimerScale * 2.30f + 117.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 222.0f : TimerPos.y + Settings::TimerScale * 2.30f + 121.0f), ImGuiCond_Always);
                 }
-                ImGui::SetNextWindowSize(ImVec2(150, 105));
+                ImGui::SetNextWindowSize(ImVec2(150, 100));
 
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f); // Setzt die Randbreite auf 2 Pixel
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 2.0f));
                 ImGui::Begin("Map info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
                 ImGui::PushFont((ImFont*)fontptr);
