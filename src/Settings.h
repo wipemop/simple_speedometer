@@ -55,6 +55,8 @@ namespace Settings
 	extern std::mutex	Mutex;
 	extern json			Settings;
 
+	std::string GenerateRandomString(size_t length);
+
 	/* Loads the settings. */
 	void Load(std::filesystem::path aPath);
 	/* Saves the settings. */

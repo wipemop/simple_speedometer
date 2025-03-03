@@ -53,15 +53,14 @@ const char* SPEEDOMETER_TIMER_SCALE = "SpeedometerTimerScale";
 const char* RESTORING_DEFAULTS = "RestoringDefaults";
 
 const char* IS_CLOUDCONFIG_ENABLED = "IsCloudConfigEnabled";
-const char* CLOUDCONFIG_ID = "CloudConfigIDC";
+const char* CLOUDCONFIG_ID = "CloudConfigID";
 
 namespace Settings
 {
 	std::mutex	Mutex;
 	json		Settings = json::object();
 
-
-	std::string generateRandomString(size_t length = 32) {
+	extern std::string GenerateRandomString(size_t length = 32) {
 		const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 		std::random_device rd;  // Non-deterministic random number generator
 		std::mt19937 gen(rd()); // Mersenne Twister engine
@@ -253,9 +252,6 @@ namespace Settings
 		if (!Settings[CLOUDCONFIG_ID].is_null())
 		{
 			Settings[CLOUDCONFIG_ID].get_to<std::string>(cloudConfigID);
-			if (cloudConfigID.empty()) {
-				cloudConfigID = generateRandomString();
-			}
 		}
 	}
 
@@ -322,5 +318,5 @@ namespace Settings
 
 
 	bool IsCloudConfigEnabled = false;
-	std::string cloudConfigID = generateRandomString();
+	std::string cloudConfigID = "";
 }

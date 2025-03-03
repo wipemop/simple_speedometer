@@ -226,7 +226,7 @@ void ReceiveFont(const char* aIdentifier, void* aFont) {
 
     if (aFont == nullptr) {
     #ifndef NDEBUG
-        APIDefs->Log(ELogLevel_CRITICAL, ADDON_NAME, ("Received nullptr for font " + std::string(aIdentifier)).c_str());
+        APIDefs->Log(ELogLevel_CRITICAL, "ADDON_NAME", ("Received nullptr for font " + std::string(aIdentifier)).c_str());
     #endif // !NDEBUG
         return;
     }
@@ -2828,6 +2828,19 @@ void TimerPauseReset(const char* aIdentifier, bool aIsRelease)
     }
 }
 
+void OpenURL(const std::string& url) {
+#ifdef _WIN32
+    ShellExecute(0, "open", url.c_str(), 0, 0, SW_SHOWNORMAL);
+#elif __APPLE__
+    std::string command = "open " + url;
+    system(command.c_str());
+#elif __linux__
+    std::string command = "xdg-open " + url;
+    system(command.c_str());
+#endif
+}
+
+
 // Realm of the Settings
 void AddonOptions()
 {
@@ -2860,6 +2873,10 @@ void AddonOptions()
     {
         if (!Settings::IsCloudConfigEnabled) Settings::IsCloudConfigEnabled = false;
         Settings::Settings[IS_CLOUDCONFIG_ENABLED] = Settings::IsCloudConfigEnabled;
+        if (Settings::cloudConfigID == "") {
+            Settings::cloudConfigID = Settings::GenerateRandomString(32);
+            Settings::Settings[CLOUDCONFIG_ID] = Settings::cloudConfigID;
+        }
         Settings::Save(SettingsPath);
     }
 
@@ -2875,6 +2892,13 @@ void AddonOptions()
             Settings::cloudConfigID = std::string(cloudConfigID);
             Settings::Settings[CLOUDCONFIG_ID] = Settings::cloudConfigID;
             Settings::Save(SettingsPath);
+        }
+        if (ImGui::Button("Open Cloud Config Page")) {
+            OpenURL("https://speedometer.cloudflare8462.workers.dev/" + Settings::cloudConfigID);
+        }
+        if (ImGui::Button("Reload Coordinates")) {
+            CoordinatesPath = APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json");
+            Coordinates::Load(CoordinatesPath);
         }
     }
 
