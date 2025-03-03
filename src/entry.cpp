@@ -1828,6 +1828,32 @@ void AddonOptions()
 
     ImGui::Separator();
     ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Configure Cloud Config:");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Cloud Configs can be shared and edited online");
+    if (ImGui::Checkbox("Enable Cloud Config", &Settings::IsCloudConfigEnabled))
+    {
+        if (!Settings::IsCloudConfigEnabled) Settings::IsCloudConfigEnabled = false;
+        Settings::Settings[IS_CLOUDCONFIG_ENABLED] = Settings::IsCloudConfigEnabled;
+        Settings::Save(SettingsPath);
+    }
+
+    static char cloudConfigID[256] = ""; // Buffer for input text
+    strncpy_s(cloudConfigID, Settings::cloudConfigID.c_str(), sizeof(Settings::cloudConfigID));
+    cloudConfigID[sizeof(cloudConfigID) - 1] = '\0';
+    if (Settings::IsCloudConfigEnabled)
+    {
+        ImGui::Text("Enter Cloud Config ID:");
+        if (ImGui::InputText("##cloudConfigID", cloudConfigID, IM_ARRAYSIZE(cloudConfigID)))
+        {
+            // Save the entered cloudConfigID to settings
+            Settings::cloudConfigID = std::string(cloudConfigID);
+            Settings::Settings[CLOUDCONFIG_ID] = Settings::cloudConfigID;
+            Settings::Save(SettingsPath);
+        }
+    }
+
+    ImGui::Separator();
+    ImGui::Separator();
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Speedometer visibility settings:");
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Toggle visibility on or off");
     if (ImGui::Checkbox("Show Speedometer", &Settings::IsDialEnabled))

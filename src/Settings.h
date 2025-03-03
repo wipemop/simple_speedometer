@@ -44,6 +44,9 @@ extern const char* SPEEDOMETER_TIMER_POSITION_V;
 extern const char* SPEEDOMETER_TIMER_SCALE;
 extern const char* RESTORING_DEFAULTS;
 
+extern const char* IS_CLOUDCONFIG_ENABLED;
+extern const char* CLOUDCONFIG_ID;
+
 
 namespace Settings
 {
@@ -92,6 +95,9 @@ namespace Settings
 	extern float TimerPositionV;
 	extern float TimerScale;
 	extern bool restoreDefaults;
+
+	extern bool IsCloudConfigEnabled;
+	extern std::string cloudConfigID;
 
 	//void DoSomething(const char* aIdentifier, bool aIsRelease);
 }
