@@ -216,7 +216,12 @@ void AddonLoad(AddonAPI* aApi)
 
     std::filesystem::create_directory(AddonPath);
     Settings::Load(SettingsPath);
-    Coordinates::Load(CoordinatesPath);
+    if (Settings::IsCloudConfigEnabled) {
+        Coordinates::LoadCloudConfig();
+    }
+    else {
+        Coordinates::Load(CoordinatesPath);
+    }
 
     APIDefs->Log(ELogLevel_DEBUG, "Load Simple Speedometer", "I am  <c=#00ff00>speed</c>.");
 }
@@ -2044,8 +2049,13 @@ void RenderTimerWindow()
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));           // Textfarbe
                 if (ImGui::Button("Reload Sets"))
                 {
-                    if (std::filesystem::exists(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json")))
-                    {
+                    if (Settings::IsCloudConfigEnabled && Settings::cloudConfigID != "") {
+                        wasJsonMissing = false;
+                        Coordinates::LoadCloudConfig();
+                        Coordinates::UpdateFilteredSetNames(currentMapID);
+
+                    }
+                    else if (std::filesystem::exists(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json"))) {
                         wasJsonMissing = false;
                         Coordinates::Load(CoordinatesPath);
                     }
@@ -2915,10 +2925,6 @@ void AddonOptions()
         }
         if (ImGui::Button("Open Cloud Config Page")) {
             OpenURL("https://speedometer.cloudflare8462.workers.dev/" + Settings::cloudConfigID);
-        }
-        if (ImGui::Button("Reload Coordinates")) {
-            CoordinatesPath = APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json");
-            Coordinates::Load(CoordinatesPath);
         }
     }
 

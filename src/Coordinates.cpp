@@ -110,79 +110,71 @@ namespace Coordinates
         return nullptr;
     }
 
+    void LoadCloudConfig() {
+        APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Loading Cloud Config.");
+        std::string url = "https://speedometer.cloudflare8462.workers.dev/api/config/" + Settings::cloudConfigID;
+        const char* cUrl = url.c_str();
+        APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", cUrl);
+        std::wstring wUrl(cUrl, cUrl + strlen(cUrl));
+        const std::string response = HTTPClient::GetRequest(wUrl.c_str());
+        try {
+            nlohmann::ordered_json cloudJson = nlohmann::ordered_json::parse(response, nullptr, false);
+            CoordinateSets.clear();
+            SetNames.clear();
+
+            for (auto& [key, value] : cloudJson["Sets"].items())
+            {
+                CoordinateSet set{};
+
+                if (value.contains("Start") && value["Start"].is_object())
+                {
+                    set.Start.x = value["Start"].value("x", 0.0f);
+                    set.Start.y = value["Start"].value("y", 0.0f);
+                    set.Start.z = value["Start"].value("z", 0.0f);
+                }
+
+                if (value.contains("End") && value["End"].is_object())
+                {
+                    set.End.x = value["End"].value("x", 0.0f);
+                    set.End.y = value["End"].value("y", 0.0f);
+                    set.End.z = value["End"].value("z", 0.0f);
+                }
+
+                set.StartRadius = value.value("Startradius", 0.0f);
+                set.EndRadius = value.value("Endradius", 0.0f);
+                set.MapID = value.value("MapID", 0);
+
+                if (value.contains("Checkpoints") && value["Checkpoints"].is_array())
+                {
+                    for (const auto& checkpoint : value["Checkpoints"])
+                    {
+                        Checkpoint cp{};
+                        if (checkpoint.contains("Position") && checkpoint["Position"].is_object())
+                        {
+                            cp.Position.x = checkpoint["Position"].value("x", 0.0f);
+                            cp.Position.y = checkpoint["Position"].value("y", 0.0f);
+                            cp.Position.z = checkpoint["Position"].value("z", 0.0f);
+                        }
+                        cp.Radius = checkpoint.value("Radius", 0.0f);
+                        set.Checkpoints.push_back(cp);
+                    }
+                }
+
+                CoordinateSets[key] = set;
+                SetNames.push_back(key);
+            }
+        }
+        catch (std::exception& ex)
+        {
+            APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Error parsing cloud config");
+        }
+        APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Cloud Config loaded");
+    }
+
 
     void Load(const std::filesystem::path& aPath)
     {
         std::lock_guard<std::mutex> lock(Mutex);
-
-        if (Settings::IsCloudConfigEnabled) {
-            APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Loading Cloud Config.");
-            std::string url = "https://speedometer.cloudflare8462.workers.dev/api/config/" + Settings::cloudConfigID;
-            const char* cUrl = url.c_str();
-            APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", cUrl);
-            std::wstring wUrl(cUrl, cUrl + strlen(cUrl));
-            const std::string response = HTTPClient::GetRequest(wUrl.c_str());
-            try {
-                nlohmann::ordered_json cloudJson = nlohmann::ordered_json::parse(response, nullptr, false);
-
-                //APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", response.c_str());
-                CoordinateSets.clear();
-                SetNames.clear();
-
-                APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Start iterating");
-                for (auto& [key, value] : cloudJson["Sets"].items())
-                {
-                    CoordinateSet set{};
-
-                    APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", key.c_str());
-                    if (value.contains("Start") && value["Start"].is_object())
-                    {
-                        set.Start.x = value["Start"].value("x", 0.0f);
-                        set.Start.y = value["Start"].value("y", 0.0f);
-                        set.Start.z = value["Start"].value("z", 0.0f);
-                    }
-
-                    if (value.contains("End") && value["End"].is_object())
-                    {
-                        set.End.x = value["End"].value("x", 0.0f);
-                        set.End.y = value["End"].value("y", 0.0f);
-                        set.End.z = value["End"].value("z", 0.0f);
-                    }
-
-                    set.StartRadius = value.value("Startradius", 0.0f);
-                    set.EndRadius = value.value("Endradius", 0.0f);
-                    set.MapID = value.value("MapID", 0);
-
-                    if (value.contains("Checkpoints") && value["Checkpoints"].is_array())
-                    {
-                        for (const auto& checkpoint : value["Checkpoints"])
-                        {
-                            Checkpoint cp{};
-                            if (checkpoint.contains("Position") && checkpoint["Position"].is_object())
-                            {
-                                cp.Position.x = checkpoint["Position"].value("x", 0.0f);
-                                cp.Position.y = checkpoint["Position"].value("y", 0.0f);
-                                cp.Position.z = checkpoint["Position"].value("z", 0.0f);
-                            }
-                            cp.Radius = checkpoint.value("Radius", 0.0f);
-                            set.Checkpoints.push_back(cp);
-                        }
-                    }
-
-                    CoordinateSets[key] = set;
-                    SetNames.push_back(key);
-                    APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", key.c_str());
-                }
-            }
-            catch (std::exception& ex)
-            {
-                APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Error parsing cloud config");
-            }
-
-
-            
-            return;
-        }
         APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Loading File Config.");
         // This data block is used to recreate the coordinates.json when it was missing, or the example_coordinates.json if the coordinates.json was invalid.
         nlohmann::ordered_json exampleJson = {
