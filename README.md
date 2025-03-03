@@ -1,3 +1,6 @@
+# Finalized version uploaded as v1.0.
+This ReadMe is not yet up to date and being worked over to provide a proper guidance to what the plugin does. Hang tight!
+
 # Welcome to a Simple Speedometer for GW2 Nexus!
 This plugin adds a graphical Speedometer with customizable measurement settings and an accurate Timer with a movement-based trigger and key bind operated pausing to the game. Both widgets have a few customization options stuffed into the configuration window of this plugin in Nexus.
 
