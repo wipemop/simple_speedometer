@@ -44,6 +44,8 @@ namespace Coordinates
 
 	void Load(const std::filesystem::path& aPath);
 
+	void LoadCloudConfig();
+
 	void UpdateFilteredSetNames(int currentMapID);
 
 	const CoordinateSet* GetSelectedCoordinateSet();

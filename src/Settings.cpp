@@ -3,6 +3,9 @@
 #include <filesystem>
 #include <fstream>
 
+#include <random>
+#include <iostream>
+
 const char* IS_READ_ME_VISIBLE = "IsReadMeVisible";
 const char* READ_ME_POSITION_H = "ReadMePositionH";
 const char* READ_ME_POSITION_V = "ReadMePositionV";
@@ -49,10 +52,29 @@ const char* SPEEDOMETER_TIMER_POSITION_V = "SpeedometerTimerPositionV";
 const char* SPEEDOMETER_TIMER_SCALE = "SpeedometerTimerScale";
 const char* RESTORING_DEFAULTS = "RestoringDefaults";
 
+const char* IS_CLOUDCONFIG_ENABLED = "IsCloudConfigEnabled";
+const char* CLOUDCONFIG_ID = "CloudConfigID";
+
 namespace Settings
 {
 	std::mutex	Mutex;
 	json		Settings = json::object();
+
+	extern std::string GenerateRandomString(size_t length = 32) {
+		const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		std::random_device rd;  // Non-deterministic random number generator
+		std::mt19937 gen(rd()); // Mersenne Twister engine
+		std::uniform_int_distribution<> distrib(0, chars.size() - 1);
+
+		std::string result;
+		result.reserve(length);
+
+		for (size_t i = 0; i < length; ++i) {
+			result += chars[distrib(gen)];
+		}
+
+		return result;
+	}
 
 	void Load(std::filesystem::path aPath)
 	{
@@ -223,6 +245,14 @@ namespace Settings
 		{
 			Settings[RESTORING_DEFAULTS].get_to<bool>(restoreDefaults);
 		}
+		if (!Settings[IS_CLOUDCONFIG_ENABLED].is_null())
+		{
+			Settings[IS_CLOUDCONFIG_ENABLED].get_to<bool>(IsCloudConfigEnabled);
+		}
+		if (!Settings[CLOUDCONFIG_ID].is_null())
+		{
+			Settings[CLOUDCONFIG_ID].get_to<std::string>(cloudConfigID);
+		}
 	}
 
 	void Save(std::filesystem::path aPath)
@@ -285,4 +315,8 @@ namespace Settings
 	float TimerPositionV = 560.0f;
 	float TimerScale = 60.0f;
 	bool restoreDefaults = false;
+
+
+	bool IsCloudConfigEnabled = false;
+	std::string cloudConfigID = "";
 }

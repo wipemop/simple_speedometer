@@ -216,7 +216,12 @@ void AddonLoad(AddonAPI* aApi)
 
     std::filesystem::create_directory(AddonPath);
     Settings::Load(SettingsPath);
-    Coordinates::Load(CoordinatesPath);
+    if (Settings::IsCloudConfigEnabled) {
+        Coordinates::LoadCloudConfig();
+    }
+    else {
+        Coordinates::Load(CoordinatesPath);
+    }
 
     APIDefs->Log(ELogLevel_DEBUG, "Load Simple Speedometer", "I am  <c=#00ff00>speed</c>.");
 }
@@ -226,7 +231,7 @@ void ReceiveFont(const char* aIdentifier, void* aFont) {
 
     if (aFont == nullptr) {
     #ifndef NDEBUG
-        APIDefs->Log(ELogLevel_CRITICAL, ADDON_NAME, ("Received nullptr for font " + std::string(aIdentifier)).c_str());
+        APIDefs->Log(ELogLevel_CRITICAL, "ADDON_NAME", ("Received nullptr for font " + std::string(aIdentifier)).c_str());
     #endif // !NDEBUG
         return;
     }
@@ -2044,8 +2049,13 @@ void RenderTimerWindow()
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));           // Textfarbe
                 if (ImGui::Button("Reload Sets"))
                 {
-                    if (std::filesystem::exists(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json")))
-                    {
+                    if (Settings::IsCloudConfigEnabled && Settings::cloudConfigID != "") {
+                        wasJsonMissing = false;
+                        Coordinates::LoadCloudConfig();
+                        Coordinates::UpdateFilteredSetNames(currentMapID);
+
+                    }
+                    else if (std::filesystem::exists(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json"))) {
                         wasJsonMissing = false;
                         Coordinates::Load(CoordinatesPath);
                     }
@@ -2848,6 +2858,19 @@ void TimerPauseReset(const char* aIdentifier, bool aIsRelease)
     }
 }
 
+void OpenURL(const std::string& url) {
+#ifdef _WIN32
+    ShellExecute(0, "open", url.c_str(), 0, 0, SW_SHOWNORMAL);
+#elif __APPLE__
+    std::string command = "open " + url;
+    system(command.c_str());
+#elif __linux__
+    std::string command = "xdg-open " + url;
+    system(command.c_str());
+#endif
+}
+
+
 // Realm of the Settings
 void AddonOptions()
 {
@@ -2873,6 +2896,37 @@ void AddonOptions()
     ImGui::Separator();
     ImGui::Separator();
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Configure Cloud Config:");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Cloud Configs can be shared and edited online");
+    if (ImGui::Checkbox("Enable Cloud Config", &Settings::IsCloudConfigEnabled))
+    {
+        if (!Settings::IsCloudConfigEnabled) Settings::IsCloudConfigEnabled = false;
+        Settings::Settings[IS_CLOUDCONFIG_ENABLED] = Settings::IsCloudConfigEnabled;
+        if (Settings::cloudConfigID == "") {
+            Settings::cloudConfigID = Settings::GenerateRandomString(32);
+            Settings::Settings[CLOUDCONFIG_ID] = Settings::cloudConfigID;
+        }
+        Settings::Save(SettingsPath);
+    }
+
+    static char cloudConfigID[256] = ""; // Buffer for input text
+    strncpy_s(cloudConfigID, Settings::cloudConfigID.c_str(), sizeof(Settings::cloudConfigID));
+    cloudConfigID[sizeof(cloudConfigID) - 1] = '\0';
+    if (Settings::IsCloudConfigEnabled)
+    {
+        ImGui::Text("Enter Cloud Config ID:");
+        if (ImGui::InputText("##cloudConfigID", cloudConfigID, IM_ARRAYSIZE(cloudConfigID)))
+        {
+            // Save the entered cloudConfigID to settings
+            Settings::cloudConfigID = std::string(cloudConfigID);
+            Settings::Settings[CLOUDCONFIG_ID] = Settings::cloudConfigID;
+            Settings::Save(SettingsPath);
+        }
+        if (ImGui::Button("Open Cloud Config Page")) {
+            OpenURL("https://gw2speedometer.de/" + Settings::cloudConfigID);
+        }
+    }
 
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Speedometer visibility settings:");
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Toggle visibility on or off");
