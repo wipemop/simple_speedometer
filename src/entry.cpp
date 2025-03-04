@@ -2924,7 +2924,7 @@ void AddonOptions()
             Settings::Save(SettingsPath);
         }
         if (ImGui::Button("Open Cloud Config Page")) {
-            OpenURL("https://speedometer.cloudflare8462.workers.dev/" + Settings::cloudConfigID);
+            OpenURL("https://gw2speedometer.de/" + Settings::cloudConfigID);
         }
     }
 
