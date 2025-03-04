@@ -112,7 +112,7 @@ namespace Coordinates
 
     void LoadCloudConfig() {
         APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Loading Cloud Config.");
-        std::string url = "https://speedometer.cloudflare8462.workers.dev/api/config/" + Settings::cloudConfigID;
+        std::string url = "https://gw2speedometer.de/api/config/" + Settings::cloudConfigID;
         const char* cUrl = url.c_str();
         APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", cUrl);
         std::wstring wUrl(cUrl, cUrl + strlen(cUrl));
