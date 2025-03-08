@@ -2897,37 +2897,6 @@ void AddonOptions()
     ImGui::Separator();
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
-    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Configure Cloud Config:");
-    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Cloud Configs can be shared and edited online");
-    if (ImGui::Checkbox("Enable Cloud Config", &Settings::IsCloudConfigEnabled))
-    {
-        if (!Settings::IsCloudConfigEnabled) Settings::IsCloudConfigEnabled = false;
-        Settings::Settings[IS_CLOUDCONFIG_ENABLED] = Settings::IsCloudConfigEnabled;
-        if (Settings::cloudConfigID == "") {
-            Settings::cloudConfigID = Settings::GenerateRandomString(32);
-            Settings::Settings[CLOUDCONFIG_ID] = Settings::cloudConfigID;
-        }
-        Settings::Save(SettingsPath);
-    }
-
-    static char cloudConfigID[256] = ""; // Buffer for input text
-    strncpy_s(cloudConfigID, Settings::cloudConfigID.c_str(), sizeof(Settings::cloudConfigID));
-    cloudConfigID[sizeof(cloudConfigID) - 1] = '\0';
-    if (Settings::IsCloudConfigEnabled)
-    {
-        ImGui::Text("Enter Cloud Config ID:");
-        if (ImGui::InputText("##cloudConfigID", cloudConfigID, IM_ARRAYSIZE(cloudConfigID)))
-        {
-            // Save the entered cloudConfigID to settings
-            Settings::cloudConfigID = std::string(cloudConfigID);
-            Settings::Settings[CLOUDCONFIG_ID] = Settings::cloudConfigID;
-            Settings::Save(SettingsPath);
-        }
-        if (ImGui::Button("Open Cloud Config Page")) {
-            OpenURL("https://gw2speedometer.de/" + Settings::cloudConfigID);
-        }
-    }
-
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Speedometer visibility settings:");
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Toggle visibility on or off");
     if (ImGui::Checkbox("Show Speedometer", &Settings::IsDialEnabled))
@@ -3431,6 +3400,64 @@ void AddonOptions()
     {
         Settings::Settings[FINISH_DIAMETER_UNITS] = Settings::finishDiameter;
         Settings::Save(SettingsPath);
+    }
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Separator();
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Predefined Timer settings");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Choose to enable or disable online storage of your Coordinate Sets.");
+    if (ImGui::Checkbox("Enable Cloud Config", &Settings::IsCloudConfigEnabled))
+    {
+        if (!Settings::IsCloudConfigEnabled) Settings::IsCloudConfigEnabled = false;
+        Settings::Settings[IS_CLOUDCONFIG_ENABLED] = Settings::IsCloudConfigEnabled;
+        if (Settings::cloudConfigID == "") {
+            Settings::cloudConfigID = Settings::GenerateRandomString(32);
+            Settings::Settings[CLOUDCONFIG_ID] = Settings::cloudConfigID;
+        }
+        Settings::Save(SettingsPath);
+    }
+
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "If enabled, Sets can be managed and easily edited using an html-based editor. Otherwise you can manually manage your local coordinates.json. ");
+        ImGui::EndTooltip();
+    }
+
+    static char cloudConfigID[256] = ""; // Buffer for input text
+    strncpy_s(cloudConfigID, Settings::cloudConfigID.c_str(), sizeof(Settings::cloudConfigID));
+    cloudConfigID[sizeof(cloudConfigID) - 1] = '\0';
+    if (Settings::IsCloudConfigEnabled)
+    {
+        ImGui::Text("Enter Cloud Config ID:");
+        if (ImGui::InputText("##cloudConfigID", cloudConfigID, IM_ARRAYSIZE(cloudConfigID)))
+        {
+            // Save the entered cloudConfigID to settings
+            Settings::cloudConfigID = std::string(cloudConfigID);
+            Settings::Settings[CLOUDCONFIG_ID] = Settings::cloudConfigID;
+            Settings::Save(SettingsPath);
+        }
+
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "This is your personal Set ID. If shared, it grants the recipient access to your Sets.");
+            ImGui::EndTooltip();
+        }
+
+        if (ImGui::Button("Open Set editor")) {
+            OpenURL("https://gw2speedometer.de/" + Settings::cloudConfigID);
+        }
+
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Access the html-based Coordinate Set editor. Saved changes will be available locally once you reload the Sets in the Predefined Timer window.");
+            ImGui::EndTooltip();
+        }
     }
 
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
