@@ -1,8 +1,11 @@
-// DISCLAIMER: I don't have the slightest clue about C++. This was built with my own ideas, but almost entirely with the help of ChatGPT, using the Raidcore / Nexus Addon-Template as a foundation.
+ï»¿// DISCLAIMER: I don't have the slightest clue about C++. This was built with my own ideas, but almost entirely with the help of ChatGPT, using the Raidcore / Nexus Addon-Template as a foundation.
 // As such, the code will likely be inefficient and generally not pretty. I tried my best optimizing obvious drawbacks in structure with my very limited expertise, but it does get the job done.
 
 #include <Windows.h>
 #include <string>
+#include <cstring>
+#include <algorithm>
+#include <stack>
 #include <stdio.h>
 #include <cstdio>
 #include <cmath>
@@ -15,9 +18,12 @@
 #include "imgui/imgui.h"
 
 #include "shared.h"
-#include "settings.h"
+#include "Settings.h"
 #include "Coordinates.h"
 #include "resource.h"
+#include "nlohmann/json.hpp"
+
+using ordered_json = nlohmann::ordered_json;
 
 /* proto */
 void AddonLoad(AddonAPI* aApi);
@@ -30,6 +36,12 @@ void InitializeHighResTimer();
 void SpeedometerToggleVisibility(const char* aIdentifier, bool aIsRelease);
 void TimerToggleVisibility(const char* aIdentifier, bool aIsRelease);
 void TimerPauseReset(const char* aIdentifier, bool aIsRelease);
+
+void EDTR_ShowMenu();
+void EDTR_LoadCoordinates();
+void EDTR_SaveCoordinates();
+void EDTR_PushUndoState();
+void EDTR_Undo();
 
 void ReceiveFont(const char* aIdentifier, void* aFont);
 
@@ -49,7 +61,18 @@ static float speed3D = 0.0f;
 static float speed2D = 0.0f;
 static float lastSpeed3D = 0.0f;
 static float lastSpeed2D = 0.0f;
+static float doubleSpeed3D = 0;
+static float doubleSpeed2D = 0;
 static ULONGLONG lastMumbleUpdate = 0;
+
+static float manualmovementThreshold = 0.0f;
+static float movementThreshold = 0.0f;
+static float finishThreshold = 0.0f;
+static float checkpointThreshold = 0.0f;
+static float basedistance = 0.0f;
+static float pausedistance = 0.0f;
+static float checkpointdistance = 0.0f;
+static float nextcheckpointdistance = 0.0f;
 
 const float conversionFactor_u_s = 39.36982f;
 const float conversionFactor_foot = 13.39111f;
@@ -85,8 +108,12 @@ static LARGE_INTEGER frequency = { 0 };
 static bool frequencyInitialized = false;
 static Vector3 basePos = { -10000.0f, -10000.0f, -10000.0f };
 static bool basePosInitialized = false;
+static Vector3 originalbasePos = { -10000.0f, -10000.0f, -10000.0f };
+static bool originalbasePosInitialized = false;
 static Vector3 pausePos = { -10000.0f, -10000.0f, -10000.0f };
 static bool pausePosInitialized = false;
+static Vector3 originalpausePos = { -10000.0f, -10000.0f, -10000.0f };
+static bool originalpausePosInitialized = false;
 static LARGE_INTEGER current = { 0 };
 static Vector3 currentPos = { 0.0f, 0.0f, 0.0f };
 float g_basedistance = 0.0f;
@@ -97,6 +124,8 @@ static bool timerFinishSet = false;
 static bool timerStartEntered = false;
 static int timerHotkeyCount = 4;
 float g_circlethickness = 0.0f;
+static int manualStartMapID = 0;
+static int manualFinishMapID = 0;
 
 float startRadius = 0.0f;
 float endRadius = 0.0f;
@@ -112,6 +141,10 @@ bool useExternalSets = false;
 int currentCheckpointIndex = 0;
 Vector3 checkpointPos = { 0.0f, 0.0f, 0.0f };
 Vector3 nextcheckpointPos = { 0.0f, 0.0f, 0.0f };
+Vector3 checkpoint1Pos = { 0.0f, 0.0f, 0.0f };
+Vector3 checkpoint2Pos = { 0.0f, 0.0f, 0.0f };
+Vector3 checkpoint3Pos = { 0.0f, 0.0f, 0.0f };
+static int checkpointCount = 0;
 static bool checkpointlist = false;
 static bool checkpointlistfinished = false;
 
@@ -120,6 +153,26 @@ static int lastMapID = -1;
 static std::vector<std::string> filteredSetNames;
 
 void* fontptr;
+
+bool EDTR_IsOpen = false;
+bool EDTR_FreshOpen = false;
+static bool newSetDefaultRadii = false;
+static bool newCheckpointDefaultRadius = false;
+std::string EDTR_SelectedSet = "";
+std::string newName = "";
+std::unordered_map<std::string, Coordinates::CoordinateSet> EDTR_CoordinateSets;
+std::vector<std::string> EDTR_SetNames;
+std::mutex EDTR_Mutex;
+std::stack<Coordinates::CoordinateSet> EDTR_UndoStack;
+float popup_centerX = 0.0f;
+float popup_centerY = 0.0f;
+float popup_buttonWidth = 0.0f;
+float popup_windowWidth = 0.0f;
+bool EDTR_ConfirmSave = false;
+bool EDTR_DiscardChanges = false;
+
+static char EDTR_selectedSetNameBuffer[128];
+static std::string EDTR_lastSelectedSet = "";
 
 
 /* Textures */
@@ -161,15 +214,15 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 // GetAddonDef: Export needed to give Nexus information about the addon.
 extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
 {
-    AddonDef.Signature = 59330; // set to random unused negative integer
+    AddonDef.Signature = 59330;
     AddonDef.APIVersion = NEXUS_API_VERSION;
     AddonDef.Name = "Simple Speedometer";
     AddonDef.Version.Major = 1;
-    AddonDef.Version.Minor = 0;
+    AddonDef.Version.Minor = 1;
     AddonDef.Version.Build = 0;
     AddonDef.Version.Revision = 1;
     AddonDef.Author = "Toxxa";
-    AddonDef.Description = "A lightly customizeable speedometer to show your current velocity. Comes with a functional, movement-triggered timer system.";
+    AddonDef.Description = "A lightly customizeable Speedometer and movement-triggered Timer system.";
     AddonDef.Load = AddonLoad;
     AddonDef.Unload = AddonUnload;
     AddonDef.Flags = EAddonFlags_None;
@@ -333,13 +386,21 @@ void UpdateSpeed()
         // Mitigating speed spikes from intermittent double readings due to polling Mumble slower than it updates - nothing's gonna save Speedometer accuracy from low framerates and frametime spikes when accelerating / decelerating though, need external polling for that, like Killer's beetle speedometer.
         if (newSpeed2D >= 1.95f * lastSpeed2D && newSpeed2D <= 2.05f * lastSpeed2D)
         {
-            newSpeed2D = lastSpeed2D;
+            if (doubleSpeed2D != lastSpeed2D)
+            {
+                newSpeed2D = lastSpeed2D;
+                doubleSpeed2D = lastSpeed2D;
+            }
         }
 
         // Same here, but for 3D speed instead.
         if (newSpeed3D >= 1.95f * lastSpeed3D && newSpeed3D <= 2.05f * lastSpeed3D)
         {
-            newSpeed3D = lastSpeed3D;
+            if (doubleSpeed3D != lastSpeed3D)
+            {
+                newSpeed3D = lastSpeed3D;
+                doubleSpeed3D = lastSpeed3D;
+            }
         }
 
         // Mitigating speed spikes from intermittent zero readings due to polling Mumble more often than it updates. This is intentional, as getting rid of intermittent zeroes is far easier to accomplish than accurately interpreting when a positional difference contained two updates and when not.
@@ -567,7 +628,7 @@ static void RenderGroundCircle(const Vector3& worldCenter, float worldRadius, Im
 
             for (size_t i = 0; i < screenPoints.size(); i++)
             {
-                size_t nextIndex = (i + 1) % screenPoints.size(); // Kreis schließen
+                size_t nextIndex = (i + 1) % screenPoints.size(); // Kreis schlieÃŸen
                 const MyVector2& p0 = screenPoints[i];
                 const MyVector2& p1 = screenPoints[nextIndex];
 
@@ -840,6 +901,58 @@ static void RenderBillboardCircle(const Vector3& worldCenter, float worldRadius,
     }
 }
 
+// Rendering the checkpoint numbers for editing mode
+static void RenderBillboardNumber(const Vector3& worldCenter, int number, ImU32 colorchoice, float scale = 3.0f, float xOffsetFactor = 0.8f, float yOffsetFactor = 1.2f)
+{
+    if (NexusLink && MumbleLink && MumbleIdentity && !MumbleLink->Context.IsMapOpen && NexusLink->IsGameplay)
+    {
+        if (Settings::IsTimerEnabled)
+        {
+            Vector3 centerMath = ConvertGW2ToMath(worldCenter);
+            Vector3 camPos = ConvertGW2ToMath(MumbleLink->CameraPosition);
+            Vector3 camFront = ConvertGW2ToMath(MumbleLink->CameraFront);
+
+            Vector3 toCamera = { camPos.X - centerMath.X, camPos.Y - centerMath.Y, camPos.Z - centerMath.Z };
+            float len = std::sqrt(toCamera.X * toCamera.X + toCamera.Y * toCamera.Y + toCamera.Z * toCamera.Z);
+            if (len > 0.0001f)
+            {
+                toCamera.X /= len;
+                toCamera.Y /= len;
+                toCamera.Z /= len;
+            }
+
+            Vector3 camUp = { 0.0f, 0.0f, 1.0f };
+            Vector3 target = { camPos.X + camFront.X, camPos.Y + camFront.Y, camPos.Z + camFront.Z };
+            Matrix4 view = LookAt(camPos, target, camUp);
+
+            ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+            float screenWidth = displaySize.x;
+            float screenHeight = displaySize.y;
+            float fov = 70 / 1.2220f * MumbleIdentity->FOV;
+            Matrix4 projection = Perspective(fov, screenWidth / screenHeight, 0.1f, 1000.0f);
+
+            MyVector2 centerScreen;
+            if (!WorldToScreen(centerMath, view, projection, screenWidth, screenHeight, centerScreen))
+                return;
+
+            char buffer[16];
+            snprintf(buffer, sizeof(buffer), "%d", number);
+
+            ImFont* font = ImGui::GetFont();
+            float oldScale = font->Scale;
+            font->Scale *= scale;
+
+            ImVec2 textSize = ImGui::CalcTextSize(buffer);
+            ImVec2 textPos = ImVec2(centerScreen.x + xOffsetFactor, centerScreen.y + yOffsetFactor);
+
+            ImDrawList* drawList = ImGui::GetForegroundDrawList();
+            drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize() * scale, textPos, colorchoice, buffer);
+
+            font->Scale = oldScale;
+        }
+    }
+}
+
 // Main function to handle the math behind the timer values
 void UpdateTimer()
 {
@@ -855,17 +968,81 @@ void UpdateTimer()
 
         Vector3 currentPos = MumbleLink->AvatarPosition;
 
-        const float manualmovementThreshold = Settings::manualstartDiameter / conversionFactor_u_s - 0.381f;
-        const float movementThreshold = (Settings::optionPredefined ? startRadius : Settings::startDiameter) / conversionFactor_u_s - 0.381f; // Maximum distance allowed to move away from the start position before the timer triggers, also used to calculate the radii of the circle indicators for visualization of the timer trigger mechanic
-        const float finishThreshold = (Settings::optionPredefined ? endRadius : Settings::finishDiameter) / conversionFactor_u_s + 0.381f;
-        const float checkpointThreshold = checkpointRadius / conversionFactor_u_s + 0.381f;
+        // Maximum distance allowed to move away from the start position before the timer triggers, also used to calculate the radii of the circle indicators for visualization of the timer trigger mechanic
+        manualmovementThreshold = Settings::manualstartDiameter / conversionFactor_u_s - 0.381f;
+        movementThreshold = (Settings::optionPredefined ? startRadius : Settings::startDiameter) / conversionFactor_u_s - 0.381f;
+        finishThreshold = (Settings::optionPredefined ? endRadius : Settings::finishDiameter) / conversionFactor_u_s + 0.381f;
+        checkpointThreshold = checkpointRadius / conversionFactor_u_s + 0.381f;
 
-        // Initial setup of the base coordinates that act as the starting position for the timer
-        if (Settings::optionManual)
+        // Setup of the base and pause coordinates if Timer is in Manual or Custom mode
+        if (Settings::optionManual && MumbleLink && MumbleIdentity)
         {
-            if (!basePosInitialized) {
+            if (basePosInitialized)
+            {
+                if (MumbleLink->Context.MapID != manualStartMapID)
+                {
+                    if (!originalbasePosInitialized)
+                    {
+                        originalbasePos = basePos;
+                        basePos = { -10000.0f, -10000.0f, -10000.0f };
+                        originalbasePosInitialized = true;
+                    }
+                }
+                else if (MumbleLink->Context.MapID == manualStartMapID)
+                {
+                    if (originalbasePosInitialized)
+                    {
+                        basePos = originalbasePos;
+                        originalbasePosInitialized = false;
+                    }
+                }
+            }
+            if (!basePosInitialized)
+            {
                 basePos = currentPos;
+                originalbasePos = basePos;
+                manualStartMapID = MumbleLink->Context.MapID;
                 basePosInitialized = true;
+                originalbasePosInitialized = true;
+            }
+        }
+
+        if (Settings::optionCustom && MumbleLink && MumbleIdentity)
+        {
+            if (MumbleLink->Context.MapID != manualStartMapID)
+            {
+                if (!originalbasePosInitialized)
+                {
+                    originalbasePos = basePos;
+                    basePos = { -10000.0f, -10000.0f, -10000.0f };
+                    originalbasePosInitialized = true;
+                }
+            }
+            else if (MumbleLink->Context.MapID == manualStartMapID)
+            {
+                if (originalbasePosInitialized)
+                {
+                    basePos = originalbasePos;
+                    originalbasePosInitialized = false;
+                }
+            }
+
+            if (MumbleLink->Context.MapID != manualFinishMapID)
+            {
+                if (!originalpausePosInitialized)
+                {
+                    originalpausePos = pausePos;
+                    pausePos = { -10000.0f, -10000.0f, -10000.0f };
+                    originalpausePosInitialized = true;
+                }
+            }
+            else if (MumbleLink->Context.MapID == manualFinishMapID)
+            {
+                if (originalpausePosInitialized)
+                {
+                    pausePos = originalpausePos;
+                    originalpausePosInitialized = false;
+                }
             }
         }
 
@@ -919,6 +1096,21 @@ void UpdateTimer()
                     nextcheckpointPos.Y = -10000.0f;
                     nextcheckpointPos.Z = -10000.0f;
                 }
+
+                if (selectedSet->Checkpoints.empty())
+                {
+                    checkpointlist = false;
+                    checkpointlistfinished = true;
+
+                    nextcheckpointPos.X = -10000.0f;
+                    nextcheckpointPos.Y = -10000.0f;
+                    nextcheckpointPos.Z = -10000.0f;
+
+                    checkpointPos.X = -10000.0f;
+                    checkpointPos.Y = -10000.0f;
+                    checkpointPos.Z = -10000.0f;
+                }
+
             }
             else
             {
@@ -939,25 +1131,25 @@ void UpdateTimer()
         float basedx = currentPos.X - basePos.X;
         float basedy = currentPos.Y - basePos.Y;
         float basedz = currentPos.Z - basePos.Z;
-        float basedistance = sqrtf(basedx * basedx + basedy * basedy + basedz * basedz);
+        basedistance = sqrtf(basedx * basedx + basedy * basedy + basedz * basedz);
 
         // Calculating the distance between the coordinates where the timer was paused and the concurrent position of the player character
         float pausedx = currentPos.X - pausePos.X;
         float pausedy = currentPos.Y - pausePos.Y;
         float pausedz = currentPos.Z - pausePos.Z;
-        float pausedistance = sqrtf(pausedx * pausedx + pausedy * pausedy + pausedz * pausedz);
+        pausedistance = sqrtf(pausedx * pausedx + pausedy * pausedy + pausedz * pausedz);
 
         // Calculating the distance between the coordinates where the timer was paused and the concurrent position of the player character
         float checkedx = currentPos.X - checkpointPos.X;
         float checkedy = currentPos.Y - checkpointPos.Y;
         float checkedz = currentPos.Z - checkpointPos.Z;
-        float checkpointdistance = sqrtf(checkedx * checkedx + checkedy * checkedy + checkedz * checkedz);
+        checkpointdistance = sqrtf(checkedx * checkedx + checkedy * checkedy + checkedz * checkedz);
 
         // Calculating the distance between the coordinates where the timer was paused and the concurrent position of the player character
         float nextcheckedx = currentPos.X - nextcheckpointPos.X;
         float nextcheckedy = currentPos.Y - nextcheckpointPos.Y;
         float nextcheckedz = currentPos.Z - nextcheckpointPos.Z;
-        float nextcheckpointdistance = sqrtf(nextcheckedx * nextcheckedx + nextcheckedy * nextcheckedy + nextcheckedz * nextcheckedz);
+        nextcheckpointdistance = sqrtf(nextcheckedx * nextcheckedx + nextcheckedy * nextcheckedy + nextcheckedz * nextcheckedz);
 
         // Exporting coordinates for use in a different function
         g_basedistance = basedistance; 
@@ -1032,35 +1224,35 @@ void UpdateTimer()
             if (selfclosecheckpointalpha < 0.0f) selfclosecheckpointalpha = 0.0f;  // Begrenze auf min. 0
         }
 
-        // Passing the desired colors of the circles to the rendering functions and calling them according to the user's settings
+        // Passing the desired colors of the circles to the rendering functions and calling them according to the user's settings and the status of the Timer
         if (Settings::optionCustom && timerHotkeyCount == 4)
         {
             g_circlethickness = 9.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(currentPos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
+                RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(currentPos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
+                RenderBillboardCircle_Arc({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(currentPos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
+                RenderBillboardCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
             }
 
             g_circlethickness = 2.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(currentPos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
+                RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(currentPos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
+                RenderBillboardCircle_Arc({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(currentPos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
+                RenderBillboardCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
             }
         }
 
@@ -1069,29 +1261,29 @@ void UpdateTimer()
             g_circlethickness = 9.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(basePos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+                RenderGroundCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(basePos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle_Arc({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(basePos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
             }
 
             g_circlethickness = 2.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(basePos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+                RenderGroundCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(basePos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle_Arc({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(basePos, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::startDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
             }
         }
 
@@ -1100,29 +1292,29 @@ void UpdateTimer()
             g_circlethickness = 9.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(basePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+                RenderGroundCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(basePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle_Arc({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(basePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
             }
 
             g_circlethickness = 2.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(basePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+                RenderGroundCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(basePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle_Arc({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(basePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
             }
 
             if (timerPaused)
@@ -1130,140 +1322,146 @@ void UpdateTimer()
                 g_circlethickness = 9.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(pausePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+                    RenderGroundCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(pausePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+                    RenderBillboardCircle_Arc({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(pausePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+                    RenderBillboardCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
                 }
 
                 g_circlethickness = 2.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(pausePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+                    RenderGroundCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(pausePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+                    RenderBillboardCircle_Arc({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(pausePos, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+                    RenderBillboardCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::manualstartDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
                 }
+
+                g_circlethickness = 9.0f;
+                RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosefinishalpha * 255)));
+
+                g_circlethickness = 2.0f;
+                RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosefinishalpha * 255)));
             }
 
             g_circlethickness = 9.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosemanualstartalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosemanualstartalpha * 255)));
 
             g_circlethickness = 2.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosemanualstartalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosemanualstartalpha * 255)));
         }
 
         if (Settings::optionCustom)
         {
             g_circlethickness = 9.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosestartalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosestartalpha * 255)));
 
             g_circlethickness = 2.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosestartalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosestartalpha * 255)));
 
             if (Settings::optionCustom && timerHotkeyCount == 2)
             {
                 g_circlethickness = 9.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(currentPos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
+                    RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(currentPos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
+                    RenderBillboardCircle_Arc({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(currentPos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
+                    RenderBillboardCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(175)));
                 }
 
                 g_circlethickness = 2.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(currentPos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
+                    RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(currentPos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
+                    RenderBillboardCircle_Arc({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(currentPos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
+                    RenderBillboardCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(255, 255, 25, static_cast<int>(175)));
                 }
             }
             g_circlethickness = 9.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(pausePos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+                RenderGroundCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(pausePos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+                RenderBillboardCircle_Arc({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(pausePos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+                RenderBillboardCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
             }
 
             g_circlethickness = 2.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(pausePos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+                RenderGroundCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(pausePos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+                RenderBillboardCircle_Arc({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(pausePos, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+                RenderBillboardCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, Settings::finishDiameter / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
             }
 
             g_circlethickness = 9.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosefinishalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosefinishalpha * 255)));
 
             g_circlethickness = 2.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosefinishalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosefinishalpha * 255)));
         }
 
-        if (Settings::optionPredefined)
+        if (Settings::optionPredefined && !EDTR_IsOpen)
         {
             g_circlethickness = 9.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(basePos, startRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+                RenderGroundCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, startRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(basePos, startRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle_Arc({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, startRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(basePos, startRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, startRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(startcirclealpha * 255)));
             }
 
             g_circlethickness = 2.0f;
             if (Settings::optionFlat)
             {
-                RenderGroundCircle(basePos, startRadius / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+                RenderGroundCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, startRadius / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionArc)
             {
-                RenderBillboardCircle_Arc(basePos, startRadius / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle_Arc({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, startRadius / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
             }
             if (Settings::optionRing)
             {
-                RenderBillboardCircle(basePos, startRadius / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
+                RenderBillboardCircle({ basePos.X, basePos.Y + Settings::CircleOffset / conversionFactor_u_s, basePos.Z }, startRadius / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(startcirclealpha * 255)));
             }
 
             if (!checkpointlistfinished)
@@ -1271,100 +1469,100 @@ void UpdateTimer()
                 g_circlethickness = 9.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(checkpointPos, checkpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(checkpointcirclealpha * 255)));
+                    RenderGroundCircle({ checkpointPos.X, checkpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, checkpointPos.Z }, checkpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(checkpointcirclealpha * 255)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(checkpointPos, checkpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(checkpointcirclealpha * 255)));
+                    RenderBillboardCircle_Arc({ checkpointPos.X, checkpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, checkpointPos.Z }, checkpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(checkpointcirclealpha * 255)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(checkpointPos, checkpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(checkpointcirclealpha * 255)));
+                    RenderBillboardCircle({ checkpointPos.X, checkpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, checkpointPos.Z }, checkpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(checkpointcirclealpha * 255)));
                 }
 
                 g_circlethickness = 2.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(checkpointPos, checkpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(checkpointcirclealpha * 255)));
+                    RenderGroundCircle({ checkpointPos.X, checkpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, checkpointPos.Z }, checkpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(checkpointcirclealpha * 255)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(checkpointPos, checkpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(checkpointcirclealpha * 255)));
+                    RenderBillboardCircle_Arc({ checkpointPos.X, checkpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, checkpointPos.Z }, checkpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(checkpointcirclealpha * 255)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(checkpointPos, checkpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(checkpointcirclealpha * 255)));
+                    RenderBillboardCircle({ checkpointPos.X, checkpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, checkpointPos.Z }, checkpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(checkpointcirclealpha * 255)));
                 }
 
                 g_circlethickness = 9.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(nextcheckpointPos, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(nextcheckpointcirclealpha * 255)));
+                    RenderGroundCircle({ nextcheckpointPos.X, nextcheckpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, nextcheckpointPos.Z }, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(nextcheckpointcirclealpha * 255)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(nextcheckpointPos, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(nextcheckpointcirclealpha * 255)));
+                    RenderBillboardCircle_Arc({ nextcheckpointPos.X, nextcheckpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, nextcheckpointPos.Z }, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(nextcheckpointcirclealpha * 255)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(nextcheckpointPos, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(nextcheckpointcirclealpha * 255)));
+                    RenderBillboardCircle({ nextcheckpointPos.X, nextcheckpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, nextcheckpointPos.Z }, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(nextcheckpointcirclealpha * 255)));
                 }
 
                 g_circlethickness = 2.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(nextcheckpointPos, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(nextcheckpointcirclealpha * 255)));
+                    RenderGroundCircle({ nextcheckpointPos.X, nextcheckpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, nextcheckpointPos.Z }, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(nextcheckpointcirclealpha * 255)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(nextcheckpointPos, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(nextcheckpointcirclealpha * 255)));
+                    RenderBillboardCircle_Arc({ nextcheckpointPos.X, nextcheckpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, nextcheckpointPos.Z }, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(nextcheckpointcirclealpha * 255)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(nextcheckpointPos, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(nextcheckpointcirclealpha * 255)));
+                    RenderBillboardCircle({ nextcheckpointPos.X, nextcheckpointPos.Y + Settings::CircleOffset / conversionFactor_u_s, nextcheckpointPos.Z }, nextcheckpointRadius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(nextcheckpointcirclealpha * 255)));
                 }
             }
 
             g_circlethickness = 9.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosestartalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosestartalpha * 255)));
 
             g_circlethickness = 2.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosestartalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosestartalpha * 255)));
 
             g_circlethickness = 9.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosecheckpointalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosecheckpointalpha * 255)));
 
             g_circlethickness = 2.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosecheckpointalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosecheckpointalpha * 255)));
 
             g_circlethickness = 9.0f;
             if ((currentCheckpointIndex + 1) == checkpointcount)
             {
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(pausePos, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 77)));
+                    RenderGroundCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 77)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(pausePos, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 77)));
+                    RenderBillboardCircle_Arc({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 77)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(pausePos, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 77)));
+                    RenderBillboardCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 77)));
                 }
 
                 g_circlethickness = 2.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(pausePos, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 77)));
+                    RenderGroundCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 77)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(pausePos, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 77)));
+                    RenderBillboardCircle_Arc({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 77)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(pausePos, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 77)));
+                    RenderBillboardCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 77)));
                 }
             }
 
@@ -1372,37 +1570,42 @@ void UpdateTimer()
             {
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(pausePos, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+                    RenderGroundCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(pausePos, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+                    RenderBillboardCircle_Arc({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(pausePos, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
+                    RenderBillboardCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(finishcirclealpha * 255)));
                 }
 
                 g_circlethickness = 2.0f;
                 if (Settings::optionFlat)
                 {
-                    RenderGroundCircle(pausePos, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+                    RenderGroundCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
                 }
                 if (Settings::optionArc)
                 {
-                    RenderBillboardCircle_Arc(pausePos, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+                    RenderBillboardCircle_Arc({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
                 }
                 if (Settings::optionRing)
                 {
-                    RenderBillboardCircle(pausePos, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
+                    RenderBillboardCircle({ pausePos.X, pausePos.Y + Settings::CircleOffset / conversionFactor_u_s, pausePos.Z }, endRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(finishcirclealpha * 255)));
                 }
             }
 
             g_circlethickness = 9.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosefinishalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(0, 0, 0, static_cast<int>(selfclosefinishalpha * 255)));
 
             g_circlethickness = 2.0f;
-            RenderGroundCircle(currentPos, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosefinishalpha * 255)));
+            RenderGroundCircle({ currentPos.X, currentPos.Y + Settings::CircleOffset / conversionFactor_u_s, currentPos.Z }, 0.381f, IM_COL32(255, 125, 25, static_cast<int>(selfclosefinishalpha * 255)));
+        }
+
+        if (Settings::optionPredefined && EDTR_IsOpen)
+        {
+
         }
 
         // Handling the timer triggering and pausing logic based on the user's settings
@@ -1480,7 +1683,7 @@ void UpdateTimer()
             }
         }
 
-        if (Settings::optionPredefined)
+        if (Settings::optionPredefined && !EDTR_IsOpen)
         {
             if (basedistance < movementThreshold)
             {
@@ -1613,10 +1816,11 @@ void RenderTimerWindow()
                 ImGui::Begin("TimerNumbers", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
                 // Formatting the timer value from the current MM:SS.mmm to a string MMSSmmmm of seven digits
-                char timerStr[8]; // 7 Zeichen + null-Terminator
+                char timerStr[8];
                 snprintf(timerStr, sizeof(timerStr), "%02lu%02lu%03lu", minutes, seconds, milliseconds);
 
-                int digitRow = timerRunning ? 0 : (timerPaused ? 4 : ((Settings::optionCustom && (!timerStartSet || !timerFinishSet || !timerStartEntered)) ? 3 : 2)); // Handling the choice of the row from where to pick a digit on the sprite sheet
+                // Handling the choice of the row from where to pick a digit on the sprite sheet
+                int digitRow = timerRunning ? 0 : (timerPaused ? 4 : ((Settings::optionCustom && (!timerStartSet || !timerFinishSet || !timerStartEntered)) ? 3 : 2));
 
                 // Calculating which digits to pick for the minutes from the sprite-sheet and where they are to be displayed. Two digits, followed by a ":". The first digit is directly placed at the top left of the window, the following digits and the signs inbetween get carefully placed in accordance by means of imgui::sameline instructions
                 for (int i = 0; i < 2; i++)
@@ -1712,7 +1916,7 @@ void RenderTimerWindow()
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
                 ImGui::Begin("Timer Modes", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
-                int timerindicatorFrame = Settings::optionManual ? 1 : (Settings::optionCustom ? 0 : 2); // Picking a specific frame from the sprite sheet based on settings - count starts from 0 for frame 1
+                int timerindicatorFrame = Settings::optionManual ? 1 : (Settings::optionPredefined ? 2 : 0); // Picking a specific frame from the sprite sheet based on settings - count starts from 0 for frame 1
                 int timerindicatornumCols = 3; // Number of colums of the sprite sheet
                 int timerindicatornumRows = 1; // Number of rows of the sprite sheet
                 int timerindicatorframeCol = timerindicatorFrame % timerindicatornumCols; // Calculating the active column
@@ -1775,6 +1979,9 @@ void RenderTimerWindow()
                                 timerRunning = false;
                                 pausedElapsedSeconds = 0.0;
                                 basePos = currentPos;
+                                originalbasePos = basePos;
+                                manualStartMapID = MumbleLink->Context.MapID;
+                                originalbasePosInitialized = true;
                             }
                         }
                         else
@@ -1783,8 +1990,12 @@ void RenderTimerWindow()
                             timerRunning = false;
                             pausedElapsedSeconds = 0.0;
                             basePos = currentPos;
+                            originalbasePos = basePos;
+                            manualStartMapID = MumbleLink->Context.MapID;
+                            originalbasePosInitialized = true;
                         }
                     }
+
                     if (Settings::optionCustom)
                     {
                         if (timerHotkeyCount == 4)
@@ -1800,21 +2011,30 @@ void RenderTimerWindow()
                             timerStartEntered = false;
                             basePos = { -10000.0f, -10000.0f, -10000.0f };
                             pausePos = { -10000.0f, -10000.0f, -10000.0f };
+                            originalbasePosInitialized = false;
+                            originalpausePosInitialized = false;
                             timerHotkeyCount = 4;
                         }
                         if (timerHotkeyCount == 2)
                         {
                             timerFinishSet = true;
                             pausePos = currentPos;
+                            originalpausePos = pausePos;
+                            manualFinishMapID = MumbleLink->Context.MapID;
+                            originalpausePosInitialized = true;
                             timerHotkeyCount = 3;
                         }
                         if (timerHotkeyCount == 1)
                         {
                             timerStartSet = true;
                             basePos = currentPos;
+                            originalbasePos = basePos;
+                            manualStartMapID = MumbleLink->Context.MapID;
+                            originalbasePosInitialized = true;
                             timerHotkeyCount = 2;
                         }
                     }
+
                     if (Settings::optionPredefined)
                     {
                         if (timerHotkeyCount == 4)
@@ -1978,6 +2198,11 @@ void RenderTimerWindow()
                 {
                     lastMapID = currentMapID;
                     Coordinates::UpdateFilteredSetNames(currentMapID);
+                    timerStartEntered = false;
+                    timerRunning = false;
+                    timerPaused = false;
+                    checkpointlistfinished = false;
+                    currentCheckpointIndex = 0;
 
                     if (Settings::selectedPredefSet >= Coordinates::FilteredSetNames.size())
                     {
@@ -1993,15 +2218,15 @@ void RenderTimerWindow()
             {
                 if (Settings::optionTimerRight)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 500.0f, Settings::optionTimerTop ? TimerPos.y - 110.0f : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 500.0f, Settings::optionTimerTop ? TimerPos.y - 115.0f : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
                 }
                 if (Settings::optionTimerLeft)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 110.0f : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 115.0f : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
                 }
-                ImGui::SetNextWindowSize(ImVec2(500, 107));
+                ImGui::SetNextWindowSize(ImVec2(500, 114));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f); // Setzt die Randbreite auf 2 Pixel
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f);
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
 
@@ -2012,12 +2237,14 @@ void RenderTimerWindow()
 
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.0f, 1.0f), "Predefined Timer settings:");
                 ImGui::SameLine(382.0f, 0.0f);
-                ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "Set reload:");
+                ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "Set options:");
 
                 ImGui::AlignTextToFramePadding();
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Coordinate Sets - Status:");
                 ImGui::SameLine();
                 ImGui::AlignTextToFramePadding();
+
+                // Display of the coordinates.json data status
                 if (Coordinates::SetNames.empty() && !wasJsonMissing)
                 {
                     ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 0.6f), " INVALID");
@@ -2032,42 +2259,104 @@ void RenderTimerWindow()
                 }
                 else
                 {
-                    ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 0.6f), " The dev is a monkey.");
+                    ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 0.6f), " Me dentge");
                 }
 
                 ImGui::SameLine(378.0f, 0.0f);
 
 
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));  // Standardfarbe der Box
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f)); // Farbe beim Hover
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));           // Textfarbe
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+
+                // Manual Coordinate Set data reload
                 if (ImGui::Button("Reload Sets"))
                 {
                     if (std::filesystem::exists(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json")))
                     {
+                        timerPaused = false;
+                        timerRunning = false;
+                        timerStartEntered = false;
+                        currentCheckpointIndex = 0;
+                        checkpointlistfinished = false;
+
                         wasJsonMissing = false;
                         Coordinates::Load(CoordinatesPath);
+                        Coordinates::UpdateFilteredSetNames(currentMapID);
                     }
                 }
-                ImGui::PopStyleColor(4); // Entfernt die 5 gesetzten Style-Änderungen
+                ImGui::PopStyleColor(4);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "Choose a coordinate set:");
 
+                ImGui::SameLine(378.0f, 0.0f);
+
+
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+
+                // Editor button
+                if (ImGui::Button("Set editor"))
+                {
+                    EDTR_IsOpen = !EDTR_IsOpen;
+
+                    if (EDTR_IsOpen)
+                    {
+                        if (std::filesystem::exists(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json")))
+                        {
+                            basePosInitialized = false;
+
+                            timerFinishSet = false;
+                            timerStartSet = false;
+                            timerPaused = false;
+                            timerRunning = false;
+                            timerStartEntered = false;
+                            basePos = { -10000.0f, -10000.0f, -10000.0f };
+                            basePosInitialized = false;
+                            pausePos = { -10000.0f, -10000.0f, -10000.0f };
+
+                            EDTR_FreshOpen = true;
+
+                            wasJsonMissing = false;
+                            Coordinates::Load(CoordinatesPath);
+                            Coordinates::UpdateFilteredSetNames(currentMapID);
+
+                            EDTR_LoadCoordinates();
+                        }
+                    }
+                }
+                ImGui::PopStyleColor(4);
+
+                // Editor window status handling
+                if (EDTR_IsOpen)
+                {
+                    EDTR_ShowMenu();
+                }
+                if (EDTR_DiscardChanges)
+                {
+                    EDTR_IsOpen = true;
+                    EDTR_DiscardChanges = false;
+                    EDTR_ShowMenu();
+                }
+
+                // Timer Coordinate Set selection dropdown
                 if (!Coordinates::FilteredSetNames.empty())
                 {
 
-                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));  // Standardfarbe der Box
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f)); // Farbe beim Hover
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
-                    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));      // Hintergrund des geschlossenen Dropdowns
-                    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f)); // Hover-Farbe
-                    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));  // Aktive Farbe
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));           // Textfarbe
-                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));         // Randfarbe
-                    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f)); // Hintergrund des Dropdown-Menüs
-                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.05f, 0.025f, 0.0f, 1.0f)); // Ausgewählte Option: Orange
-                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f)); // Hover über Option: Hellorange
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2f, 0.075f, 0.0f, 1.0f));
 
                     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 1.0f);
@@ -2093,7 +2382,7 @@ void RenderTimerWindow()
                         }
                         ImGui::EndCombo();
                     }
-                    ImGui::PopStyleColor(12); // Entfernt die 5 gesetzten Style-Änderungen
+                    ImGui::PopStyleColor(12);
                 }
                 else
                 {
@@ -2115,7 +2404,7 @@ void RenderTimerWindow()
                 }
                 ImGui::SetNextWindowSize(ImVec2(150, 100));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f); // Setzt die Randbreite auf 2 Pixel
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f);
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
 
@@ -2159,6 +2448,793 @@ void RenderTimerWindow()
             }
         }
     }
+
+}
+
+// Load function for the editor
+void EDTR_LoadCoordinates()
+{
+    std::lock_guard<std::mutex> lock(EDTR_Mutex);
+    EDTR_CoordinateSets.clear();
+    EDTR_SetNames.clear();
+
+    std::ifstream file(CoordinatesPath);
+    if (!file.is_open()) return;
+
+    ordered_json j;
+    file >> j;
+    file.close();
+
+    if (!j.contains("Sets") || !j["Sets"].is_object()) return;
+
+    for (auto& [key, value] : j["Sets"].items())
+    {
+        Coordinates::CoordinateSet set{};
+
+        if (value.contains("Start"))
+        {
+            set.Start.x = value["Start"].value("x", 0.0f);
+            set.Start.y = value["Start"].value("y", 0.0f);
+            set.Start.z = value["Start"].value("z", 0.0f);
+        }
+
+        if (value.contains("End"))
+        {
+            set.End.x = value["End"].value("x", 0.0f);
+            set.End.y = value["End"].value("y", 0.0f);
+            set.End.z = value["End"].value("z", 0.0f);
+        }
+
+        set.StartRadius = value.value("Startradius", 0.0f);
+        set.EndRadius = value.value("Endradius", 0.0f);
+        set.MapID = value.value("MapID", 0);
+
+        if (value.contains("Checkpoints") && value["Checkpoints"].is_array())
+        {
+            for (const auto& checkpoint : value["Checkpoints"])
+            {
+                Coordinates::Checkpoint cp{};
+                if (checkpoint.contains("Position"))
+                {
+                    cp.Position.x = checkpoint["Position"].value("x", 0.0f);
+                    cp.Position.y = checkpoint["Position"].value("y", 0.0f);
+                    cp.Position.z = checkpoint["Position"].value("z", 0.0f);
+                }
+                cp.Radius = checkpoint.value("Radius", 0.0f);
+                set.Checkpoints.push_back(cp);
+            }
+        }
+
+        EDTR_CoordinateSets[key] = set;
+        EDTR_SetNames.push_back(key);
+    }
+
+    if (!EDTR_SetNames.empty())
+        EDTR_SelectedSet = EDTR_SetNames[0];
+}
+
+// Save function for the editor
+void EDTR_SaveCoordinates()
+{
+    std::lock_guard<std::mutex> lock(EDTR_Mutex);
+    ordered_json j;
+    j["Sets"] = ordered_json::object();
+
+    // Creating a temporary, alphabetically sorted list of the Coordinate Set name keys
+    std::vector<std::string> sortedKeys;
+    for (const auto& [key, _] : EDTR_CoordinateSets)
+    {
+        sortedKeys.push_back(key);
+    }
+    std::sort(sortedKeys.begin(), sortedKeys.end());
+
+    // Writing the Coordinate Sets data to the file
+    for (const auto& key : sortedKeys)
+    {
+        const auto& set = EDTR_CoordinateSets.at(key);
+
+        j["Sets"][key] = {
+            {"MapID", set.MapID},
+            {"Start", {{"x", set.Start.x}, {"y", set.Start.y}, {"z", set.Start.z}}},
+            {"Startradius", set.StartRadius},
+            {"Checkpoints", ordered_json::array()},
+            {"End", {{"x", set.End.x}, {"y", set.End.y}, {"z", set.End.z}}},
+            {"Endradius", set.EndRadius}
+        };
+
+        for (const auto& cp : set.Checkpoints)
+        {
+            j["Sets"][key]["Checkpoints"].push_back({
+                {"Position", {{"x", cp.Position.x}, {"y", cp.Position.y}, {"z", cp.Position.z}}},
+                {"Radius", cp.Radius}
+                });
+        }
+    }
+
+    // Saving the file
+    std::ofstream file(CoordinatesPath);
+    if (file.is_open())
+    {
+        file << j.dump(4);
+        file.close();
+    }
+}
+
+// Saving undoable stuff to the undo stack
+void EDTR_PushUndoState()
+{
+    if (EDTR_CoordinateSets.find(EDTR_SelectedSet) != EDTR_CoordinateSets.end())
+    {
+        EDTR_UndoStack.push(EDTR_CoordinateSets[EDTR_SelectedSet]);
+    }
+}
+
+// Undoing the most recent thing in the stack
+void EDTR_Undo()
+{
+    if (!EDTR_UndoStack.empty())
+    {
+        EDTR_CoordinateSets[EDTR_SelectedSet] = EDTR_UndoStack.top();
+        EDTR_UndoStack.pop();
+    }
+}
+
+// Editor function
+void EDTR_ShowMenu()
+{
+    if (!EDTR_IsOpen)
+    {
+        EDTR_FreshOpen = false;
+        return;
+    }
+
+    // Checking if a Coordinate Set is active in the Timer and selecting it, if that is the case. Otherwise the editor will default to the first Set in the list.
+    if (EDTR_FreshOpen)
+    {
+        if (!Coordinates::FilteredSetNames.empty() && Settings::selectedPredefSet < Coordinates::FilteredSetNames.size())
+        {
+            const std::string& predefSet = Coordinates::FilteredSetNames[Settings::selectedPredefSet];
+
+            if (!predefSet.empty() && EDTR_CoordinateSets.find(predefSet) != EDTR_CoordinateSets.end())
+            {
+                EDTR_SelectedSet = predefSet;
+                EDTR_lastSelectedSet = predefSet;
+                strncpy(EDTR_selectedSetNameBuffer, predefSet.c_str(), sizeof(EDTR_selectedSetNameBuffer));
+                EDTR_selectedSetNameBuffer[sizeof(EDTR_selectedSetNameBuffer) - 1] = '\0';
+
+                EDTR_FreshOpen = false;
+            }
+        }
+    }
+
+    ImGui::SetNextWindowSize(ImVec2(755, 825));
+
+    ImGui::PushStyleColor(ImGuiCol_TitleBg, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_TitleBgCollapsed, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2f, 0.075f, 0.0f, 1.0f));
+
+    ImGui::Begin("Coordinate Set Editor", &EDTR_IsOpen, ImGuiWindowFlags_AlwaysAutoResize);
+
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::SetNextItemWidth(620.0f);
+
+    // Coordinate Set dropdown list
+    if (ImGui::BeginCombo("##Select Set", EDTR_SelectedSet.c_str()))
+    {
+        for (const auto& name : EDTR_SetNames)
+        {
+            if (ImGui::Selectable(name.c_str(), EDTR_SelectedSet == name))
+                EDTR_SelectedSet = name;
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::SameLine(635.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Select Set");
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    // Writing the contents of the selected Set name to the buffer
+    auto& set = EDTR_CoordinateSets[EDTR_SelectedSet];
+    if (EDTR_lastSelectedSet != EDTR_SelectedSet)
+    {
+        strncpy(EDTR_selectedSetNameBuffer, EDTR_SelectedSet.c_str(), sizeof(EDTR_selectedSetNameBuffer));
+        EDTR_selectedSetNameBuffer[sizeof(EDTR_selectedSetNameBuffer) - 1] = '\0';
+        EDTR_lastSelectedSet = EDTR_SelectedSet;
+    }
+
+    ImGui::Separator();
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Coordinate Set name and map ID:");
+
+    ImGui::SameLine(530.0f, 0.0f);
+
+    // Button to import Mumble Map Id data to the Map ID input box
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.5f, 0.6f));
+    if (ImGui::Button("Use current map ID##MapID"))
+    {
+        EDTR_PushUndoState();
+        set.MapID = MumbleLink->Context.MapID;
+    }
+    ImGui::PopStyleColor();
+
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::SetNextItemWidth(410.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
+
+    // Text box for the Coordinate Set name. This will be pre-filled with the Set name on loading the editor.
+    ImGui::InputText("##Set Name", EDTR_selectedSetNameBuffer, sizeof(EDTR_selectedSetNameBuffer));
+
+    ImGui::PopStyleColor();
+    ImGui::SameLine(425.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Set name");
+
+    ImGui::SameLine(530.0f, 0.0f);
+    ImGui::SetNextItemWidth(130.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
+
+    // Input box for the Map ID. This will be pre-filled with the current Map ID if a new set gets created.
+    if (ImGui::InputInt("##Map ID", &set.MapID));
+
+    ImGui::PopStyleColor();
+    ImGui::SameLine(670.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Map ID");
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::Separator();
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Start location:");
+
+    ImGui::SameLine(232.0f, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.5f, 0.6f));
+
+    // Button to import Mumble positional data into the input boxes for the start location
+    if (ImGui::Button("Use current pos.##Start"))
+    {
+        EDTR_PushUndoState();
+        set.Start.x = g_currentPos.X;
+        set.Start.y = g_currentPos.Y;
+        set.Start.z = g_currentPos.Z;
+    }
+
+    ImGui::PopStyleColor();
+
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::SetNextItemWidth(330.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
+
+    // Input boxes for the start location
+    if (ImGui::InputFloat3("##Start X Y Z", &set.Start.x));
+
+    ImGui::PopStyleColor();
+    ImGui::SameLine(345.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Start X Y Z");
+
+    ImGui::SameLine(490.0f, 0.0f);
+    ImGui::SetNextItemWidth(110.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
+
+    // Input slider for the start radius
+    if (ImGui::DragFloat("##Start Radius", &set.StartRadius, 1.0f, 18.0f, 900.0f, "> %.0f <"));
+
+    ImGui::PopStyleColor();
+    ImGui::SameLine(610.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Start Radius");
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    // Visualization of the start circle when the editor is open. Unlimited visibility range.
+    g_circlethickness = 9.0f;
+    if (Settings::optionFlat)
+    {
+        RenderGroundCircle({ set.Start.x, set.Start.y + Settings::CircleOffset / conversionFactor_u_s, set.Start.z }, set.StartRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(1 * 255)));
+    }
+    if (Settings::optionArc)
+    {
+        RenderBillboardCircle_Arc({ set.Start.x, set.Start.y + Settings::CircleOffset / conversionFactor_u_s, set.Start.z }, set.StartRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(1 * 255)));
+    }
+    if (Settings::optionRing)
+    {
+        RenderBillboardCircle({ set.Start.x, set.Start.y + Settings::CircleOffset / conversionFactor_u_s, set.Start.z }, set.StartRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(1 * 255)));
+    }
+
+    g_circlethickness = 2.0f;
+    if (Settings::optionFlat)
+    {
+        RenderGroundCircle({ set.Start.x, set.Start.y + Settings::CircleOffset / conversionFactor_u_s, set.Start.z }, set.StartRadius / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(1 * 255)));
+    }
+    if (Settings::optionArc)
+    {
+        RenderBillboardCircle_Arc({ set.Start.x, set.Start.y + Settings::CircleOffset / conversionFactor_u_s, set.Start.z }, set.StartRadius / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(1 * 255)));
+    }
+    if (Settings::optionRing)
+    {
+        RenderBillboardCircle({ set.Start.x, set.Start.y + Settings::CircleOffset / conversionFactor_u_s, set.Start.z }, set.StartRadius / conversionFactor_u_s, IM_COL32(255, 255, 255, static_cast<int>(1 * 255)));
+    }
+
+    ImGui::Separator();
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Checkpoints:");
+
+    // Embedded child window for the checkpoint list
+    ImGui::BeginChild("CheckpointList", ImVec2(0, 320), true, ImGuiWindowFlags_HorizontalScrollbar);
+
+    // Looping the UI setup sequentially for every checkpoint that currently exists in the Set
+    for (size_t i = 0; i < set.Checkpoints.size(); ++i)
+    {
+        ImGui::PushID(i);
+
+        // Numbering the checkpoints
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%zu.", i + 1);
+
+        ImGui::SameLine(35.0f, 0.0f);
+        ImGui::SetNextItemWidth(330.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
+
+        // Input boxes for the checkpoint locations
+        if (ImGui::InputFloat3("##X Y Z", &set.Checkpoints[i].Position.x, "%.4f"));
+
+        ImGui::PopStyleColor();
+        ImGui::SameLine(380.0f, 0.0f);
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "X Y Z");
+
+        ImGui::SameLine(475.0f, 0.0f);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.5f, 0.6f));
+
+        // Button to import Mumble positional data into the input boxes for the checkpoint location
+        if (ImGui::Button("Use current pos.##End"))
+        {
+            EDTR_PushUndoState();
+            set.Checkpoints[i].Position.x = g_currentPos.X;
+            set.Checkpoints[i].Position.y = g_currentPos.Y;
+            set.Checkpoints[i].Position.z = g_currentPos.Z;
+        }
+        ImGui::PopStyleColor();
+
+        // Button to move a checkpoint up in the list
+        if (i > 0)
+        {
+            ImGui::SameLine(695.0f, 0.0f);
+            if (ImGui::Button("/\\"))
+            {
+                EDTR_PushUndoState();
+                std::swap(set.Checkpoints[i], set.Checkpoints[i - 1]);
+            }
+        }
+        else
+        {
+            ImGui::SameLine(695.0f, 0.0f);
+            if (ImGui::Button("--"))
+            {
+
+            }
+        }
+
+        ImGui::Dummy(ImVec2(0.0f, 0.0f));
+        ImGui::SameLine(35.0f, 0.0f);
+        ImGui::SetNextItemWidth(330.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
+
+        // Input slider for the checkpoint radius 
+        if (ImGui::DragFloat("##Radius", &set.Checkpoints[i].Radius, 1.0f, 18.0f, 900.0f, "> %.0f <"));
+
+        ImGui::PopStyleColor();
+        ImGui::SameLine(380.0f, 0.0f);
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Radius");
+
+        // Visualization of the checkpoint circles when the editor is open. Unlimited visibility range, added numbers for easy identification.
+        g_circlethickness = 9.0f;
+        if (Settings::optionFlat)
+        {
+            RenderGroundCircle({ set.Checkpoints[i].Position.x, set.Checkpoints[i].Position.y + Settings::CircleOffset / conversionFactor_u_s, set.Checkpoints[i].Position.z }, set.Checkpoints[i].Radius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(1 * 255)));
+        }
+        if (Settings::optionArc)
+        {
+            RenderBillboardCircle_Arc({ set.Checkpoints[i].Position.x, set.Checkpoints[i].Position.y + Settings::CircleOffset / conversionFactor_u_s, set.Checkpoints[i].Position.z }, set.Checkpoints[i].Radius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(1 * 255)));
+        }
+        if (Settings::optionRing)
+        {
+            RenderBillboardCircle({ set.Checkpoints[i].Position.x, set.Checkpoints[i].Position.y + Settings::CircleOffset / conversionFactor_u_s, set.Checkpoints[i].Position.z }, set.Checkpoints[i].Radius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(1 * 255)));
+        }
+
+        g_circlethickness = 2.0f;
+        if (Settings::optionFlat)
+        {
+            RenderGroundCircle({ set.Checkpoints[i].Position.x, set.Checkpoints[i].Position.y + Settings::CircleOffset / conversionFactor_u_s, set.Checkpoints[i].Position.z }, set.Checkpoints[i].Radius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(1 * 255)));
+        }
+        if (Settings::optionArc)
+        {
+            RenderBillboardCircle_Arc({ set.Checkpoints[i].Position.x, set.Checkpoints[i].Position.y + Settings::CircleOffset / conversionFactor_u_s, set.Checkpoints[i].Position.z }, set.Checkpoints[i].Radius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(1 * 255)));
+        }
+        if (Settings::optionRing)
+        {
+            RenderBillboardCircle({ set.Checkpoints[i].Position.x, set.Checkpoints[i].Position.y + Settings::CircleOffset / conversionFactor_u_s, set.Checkpoints[i].Position.z }, set.Checkpoints[i].Radius / conversionFactor_u_s, IM_COL32(100, 255, 255, static_cast<int>(1 * 255)));
+        }
+
+        RenderBillboardNumber({ set.Checkpoints[i].Position.x, set.Checkpoints[i].Position.y + Settings::CircleOffset / conversionFactor_u_s, set.Checkpoints[i].Position.z }, i + 1, IM_COL32(0, 0, 0, 255), 2.0f, -10.0f, -22.0f);
+
+        RenderBillboardNumber({ set.Checkpoints[i].Position.x, set.Checkpoints[i].Position.y + Settings::CircleOffset / conversionFactor_u_s, set.Checkpoints[i].Position.z }, i + 1, IM_COL32(100, 255, 255, 255), 2.0f, -13.0f, -25.0f);
+
+        ImGui::SameLine(475.0f, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.2f, 0.0f, 0.6f));
+
+        // Button to delete a checkpoint
+        if (ImGui::Button("Remove checkpoint"))
+        {
+            EDTR_PushUndoState();
+            set.Checkpoints.erase(set.Checkpoints.begin() + i);
+        }
+
+        ImGui::PopStyleColor();
+
+        // Button to move a checkpoint down in the list
+        if (i < set.Checkpoints.size() - 1)
+        {
+            ImGui::SameLine(695.0f, 0.0f);
+            if (ImGui::Button("\\/"))
+            {
+                EDTR_PushUndoState();
+                std::swap(set.Checkpoints[i], set.Checkpoints[i + 1]);
+            }
+        }
+        else
+        {
+            ImGui::SameLine(695.0f, 0.0f);
+            if (ImGui::Button("--"))
+            {
+
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::PopID();
+    }
+
+    ImGui::EndChild();
+
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+
+    // Button to add a new checkpoint to the list
+    if (ImGui::Button("Add new Checkpoint"))
+    {
+        EDTR_PushUndoState();
+        set.Checkpoints.push_back({ {g_currentPos.X, g_currentPos.Y, g_currentPos.Z}, 75.0f });
+    }
+
+    ImGui::SameLine(380.0f, 0.0f);
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 0.6f));
+
+    // Button to undo additions and removals of checkpoints, as well as Mumble data imports
+    if (ImGui::Button("Undo addition / removal / position") && !EDTR_UndoStack.empty())
+    {
+        EDTR_Undo();
+    }
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::PopStyleColor();
+
+    ImGui::Separator();
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Finish location:");
+
+    ImGui::SameLine(232.0f, 0.0f);
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.5f, 0.6f));
+
+    // Button to import Mumble positional data into the input boxes for the finish location
+    if (ImGui::Button("Use current pos.##End"))
+    {
+        EDTR_PushUndoState();
+        set.End.x = g_currentPos.X;
+        set.End.y = g_currentPos.Y;
+        set.End.z = g_currentPos.Z;
+    }
+
+    ImGui::PopStyleColor();
+
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::SetNextItemWidth(330.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
+
+    // Input boxes for the finish location
+    if (ImGui::InputFloat3("##Finish X Y Z", &set.End.x));
+
+    ImGui::PopStyleColor();
+
+    ImGui::SameLine(345.0f, 0.0f);
+
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Finish X Y Z");
+
+    ImGui::SameLine(490.0f, 0.0f);
+
+    ImGui::SetNextItemWidth(110.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
+
+    // Input slider for the finish circle radius
+    if (ImGui::DragFloat("##Finish Radius", &set.EndRadius, 1.0f, 18.0f, 900.0f, "> %.0f <"));
+
+    ImGui::PopStyleColor();
+    ImGui::SameLine(605.0f, 0.0f);
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Finish Radius");
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    // Visualization of the finish circle when the editor is open. Unlimited visibility range.
+    g_circlethickness = 9.0f;
+    if (Settings::optionFlat)
+    {
+        RenderGroundCircle({ set.End.x, set.End.y + Settings::CircleOffset / conversionFactor_u_s, set.End.z }, set.EndRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(1 * 255)));
+    }
+    if (Settings::optionArc)
+    {
+        RenderBillboardCircle_Arc({ set.End.x, set.End.y + Settings::CircleOffset / conversionFactor_u_s, set.End.z }, set.EndRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(1 * 255)));
+    }
+    if (Settings::optionRing)
+    {
+        RenderBillboardCircle({ set.End.x, set.End.y + Settings::CircleOffset / conversionFactor_u_s, set.End.z }, set.EndRadius / conversionFactor_u_s, IM_COL32(0, 0, 0, static_cast<int>(1 * 255)));
+    }
+
+    g_circlethickness = 2.0f;
+    if (Settings::optionFlat)
+    {
+        RenderGroundCircle({ set.End.x, set.End.y + Settings::CircleOffset / conversionFactor_u_s, set.End.z }, set.EndRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(1 * 255)));
+    }
+    if (Settings::optionArc)
+    {
+        RenderBillboardCircle_Arc({ set.End.x, set.End.y + Settings::CircleOffset / conversionFactor_u_s, set.End.z }, set.EndRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(1 * 255)));
+    }
+    if (Settings::optionRing)
+    {
+        RenderBillboardCircle({ set.End.x, set.End.y + Settings::CircleOffset / conversionFactor_u_s, set.End.z }, set.EndRadius / conversionFactor_u_s, IM_COL32(25, 255, 25, static_cast<int>(1 * 255)));
+    }
+
+    ImGui::Separator();
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+
+    // Button to duplicate the currently selected Set, adding " Copy" to its name by default
+    if (ImGui::Button("Duplicate this Set"))
+    {
+        std::string newName = EDTR_SelectedSet + " Copy";
+        EDTR_CoordinateSets[newName] = set;
+        EDTR_SetNames.push_back(newName);
+        EDTR_SelectedSet = newName;
+    }
+
+    ImGui::SameLine(302.0f, 0.0f);
+
+    // Button to delete the currently selected Set
+    if (ImGui::Button("Delete this Set"))
+    {
+        EDTR_CoordinateSets.erase(EDTR_SelectedSet);
+        EDTR_SetNames.erase(std::remove(EDTR_SetNames.begin(), EDTR_SetNames.end(), EDTR_SelectedSet), EDTR_SetNames.end());
+        if (!EDTR_SetNames.empty()) EDTR_SelectedSet = EDTR_SetNames[0];
+    }
+    ImGui::SameLine(583.0f, 0.0f);
+
+    // Setting the radii of start and finish to values other than zero if a new Set is created
+    if (newSetDefaultRadii == true)
+    {
+        newSetDefaultRadii = false;
+        set.StartRadius = 50.0f;
+        set.EndRadius = 100.0f;
+        set.MapID = MumbleLink->Context.MapID;
+    }
+
+    // Button to create a new Set
+    if (ImGui::Button("Create new Set"))
+    {
+        std::string newName = "New Set";
+        EDTR_CoordinateSets[newName] = {};
+        EDTR_SetNames.push_back(newName);
+        EDTR_SelectedSet = newName;
+        newSetDefaultRadii = true;
+    }
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::Separator();
+    ImGui::Separator();
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 0.0f));
+    ImGui::SameLine(10.0f, 0.0f);
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 0.6f));
+
+    // Button to save and reload the Coordinate Set list
+    if (ImGui::Button("Save changes and reload sets"))
+    {
+        std::string newName(EDTR_selectedSetNameBuffer);
+
+        if (newName.empty())
+        {
+            ImGui::OpenPopup("Error_Name-Empty");
+        }
+        else
+        {
+            ImGui::OpenPopup("Confirm_Save-Reload");
+        }
+    }
+
+    ImGui::PopStyleColor();
+
+    // Centering the following popup windows
+    popup_centerX = NexusLink->Width / 2.0f;
+    popup_centerY = NexusLink->Height / 2.0f;
+    ImGui::SetNextWindowPos(ImVec2(popup_centerX, popup_centerY), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    // Error popup if the Set name was empty. Apparently leaving it blank doesn't crash the plugin, but it may cause other unforseen interactions. I wouldn't know, C++ is very much an enigma to me lmao
+    if (ImGui::BeginPopupModal("Error_Name-Empty", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "The name for the current set must not be empty! Changes have not been saved.");
+        ImGui::Separator();
+
+        popup_buttonWidth = 80.0f;
+        popup_windowWidth = ImGui::GetWindowSize().x;
+        ImGui::SetCursorPosX((popup_windowWidth - popup_buttonWidth) * 0.5f);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 0.6f));
+        if (ImGui::Button("OK", ImVec2(popup_buttonWidth, 0)))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::EndPopup();
+    }
+
+    // Confirmation popup if the Coordinate Set list is about to be saved and reloaded
+    if (ImGui::BeginPopupModal("Confirm_Save-Reload", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Please confirm saving and reloading your Sets. This cannot be undone.");
+        ImGui::Separator();
+
+        popup_buttonWidth = 80.0f;
+        popup_windowWidth = ImGui::GetWindowSize().x;
+        ImGui::SetCursorPosX((popup_windowWidth - popup_buttonWidth) * 0.25f);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 0.6f));
+        if (ImGui::Button("Confirm", ImVec2(popup_buttonWidth, 0)))
+        {
+            EDTR_ConfirmSave = true; // Speichern im nÃ¤chsten Frame auslÃ¶sen
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::PopStyleColor();
+
+        ImGui::SetCursorPosX((popup_windowWidth - popup_buttonWidth) * 0.75f);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 0.6f));
+        if (ImGui::Button("Abort", ImVec2(popup_buttonWidth, 0)))
+        {
+            EDTR_ConfirmSave = false; // Kein Speichern
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::EndPopup();
+    }
+
+    // If saving was confirmed, setting the necessary variables for the reload and executing the saving
+    if (EDTR_ConfirmSave)
+    {
+        std::string newName(EDTR_selectedSetNameBuffer);
+
+        if (newName != EDTR_SelectedSet)
+        {
+            auto setData = EDTR_CoordinateSets[EDTR_SelectedSet];
+            EDTR_CoordinateSets.erase(EDTR_SelectedSet);
+            EDTR_CoordinateSets[newName] = setData;
+
+            std::replace(EDTR_SetNames.begin(), EDTR_SetNames.end(), EDTR_SelectedSet, newName);
+
+            EDTR_SelectedSet = newName;
+            strncpy(EDTR_selectedSetNameBuffer, newName.c_str(), sizeof(EDTR_selectedSetNameBuffer));
+            EDTR_selectedSetNameBuffer[sizeof(EDTR_selectedSetNameBuffer) - 1] = '\0';
+            EDTR_lastSelectedSet = newName;
+        }
+
+        timerStartEntered = false;
+        timerRunning = false;
+        timerPaused = false;
+        checkpointlistfinished = false;
+        currentCheckpointIndex = 0;
+
+        EDTR_SaveCoordinates();
+        Coordinates::Load(CoordinatesPath);
+        Coordinates::UpdateFilteredSetNames(currentMapID);
+
+        EDTR_ConfirmSave = false; // ZurÃ¼cksetzen
+    }
+
+    ImGui::SameLine(455.0f, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 0.6f));
+    if (ImGui::Button("Discard all unsaved changes"))
+    {
+        ImGui::OpenPopup("Confirm_Discard-Changes");
+    }
+    ImGui::PopStyleColor();
+
+    // Confirmation popupif the Coordinate Set list is about to be reloaded in order to discard all unsaved changes
+    if (ImGui::BeginPopupModal("Confirm_Discard-Changes", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Please confirm discarding all unsaved changes. This cannot be undone.");
+        ImGui::Separator();
+
+        popup_buttonWidth = 80.0f;
+        popup_windowWidth = ImGui::GetWindowSize().x;
+        ImGui::SetCursorPosX((popup_windowWidth - popup_buttonWidth) * 0.25f);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 0.6f));
+        if (ImGui::Button("Confirm", ImVec2(popup_buttonWidth, 0)))
+        {
+            EDTR_DiscardChanges = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine(0.0f, 0.0f);
+
+        ImGui::SetCursorPosX((popup_windowWidth - popup_buttonWidth) * 0.75f);
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 0.6f));
+        if (ImGui::Button("Abort", ImVec2(popup_buttonWidth, 0)))
+        {
+            EDTR_DiscardChanges = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::EndPopup();
+    }
+
+    // If discarding was confirmed, setting the necessary variables for the discarding
+    if (EDTR_DiscardChanges)
+    {
+        EDTR_LoadCoordinates();
+        strncpy(EDTR_selectedSetNameBuffer, EDTR_SelectedSet.c_str(), sizeof(EDTR_selectedSetNameBuffer));
+        EDTR_selectedSetNameBuffer[sizeof(EDTR_selectedSetNameBuffer) - 1] = '\0';
+        EDTR_lastSelectedSet = EDTR_SelectedSet;
+
+        EDTR_IsOpen = false;
+        EDTR_FreshOpen = true;
+    }
+
+    ImGui::End();
+
+    ImGui::PopStyleColor(16);
 }
 
 // Main function for the rendering of the Speedometer as well as calling the functions related to the calculations of the speedometer, the timer and the rendering of the latter
@@ -2584,7 +3660,7 @@ void AddonRender()
                     {"3D speed, Feet%:", lastSpeed3D * conversionFactor_foot},
                     {"2D speed, Btl.%:", lastSpeed2D * conversionFactor_beetle},
                     {"3D speed, Btl.%:", lastSpeed3D * conversionFactor_beetle},
-                    {"Dist. from Start:", (Settings::optionCustom && !timerStartSet) ? 0 : ((Settings::optionPredefined && Coordinates::FilteredSetNames.empty()) ? 0 : (g_basedistance + 0.381f) * conversionFactor_u_s - (Settings::optionCustom ? Settings::startDiameter : (Settings::optionPredefined ? startRadius : Settings::manualstartDiameter)))},
+                    {"Dist. from Start:", originalbasePosInitialized ? 0 : (Settings::optionCustom && !timerStartSet) ? 0 : ((Settings::optionPredefined && Coordinates::FilteredSetNames.empty()) ? 0 : (g_basedistance + 0.381f) * conversionFactor_u_s - (Settings::optionCustom ? Settings::startDiameter : (Settings::optionPredefined ? startRadius : Settings::manualstartDiameter)))},
                     {"Dist. to Checkp.:", (Settings::optionPredefined && !Coordinates::FilteredSetNames.empty() && !checkpointlistfinished) ? ((g_checkpointdistance - 0.381f) * conversionFactor_u_s - checkpointRadius) : 0},
                     {"Dist. to Finish:", Settings::optionManual ? 0 : (Settings::optionCustom && !timerFinishSet) ? 0 : (((Settings::optionPredefined && Coordinates::FilteredSetNames.empty()) ? 0 : (g_pausedistance - 0.381f)) * conversionFactor_u_s - (Settings::optionCustom ? Settings::finishDiameter : (Settings::optionPredefined && Coordinates::FilteredSetNames.empty()) ? 0 : endRadius))}
                     //{"X Pos.(W-E):", g_currentPos.X},
@@ -2605,14 +3681,14 @@ void AddonRender()
 
                     char buffer[16];
 
-                    // Prüfe, ob der Eintrag eine Koordinate ist
+                    // PrÃ¼fe, ob der Eintrag eine Koordinate ist
                     if (strstr(entry.label, "Pos.") != nullptr)
                     {
-                        snprintf(buffer, sizeof(buffer), "%.4f", entry.value);  // 4 Nachkommastellen für X, Y, Z
+                        snprintf(buffer, sizeof(buffer), "%.4f", entry.value);  // 4 Nachkommastellen fÃ¼r X, Y, Z
                     }
                     else
                     {
-                        snprintf(buffer, sizeof(buffer), "%4d", static_cast<int>(roundf(entry.value)));  // Ganze Zahl für andere Werte
+                        snprintf(buffer, sizeof(buffer), "%4d", static_cast<int>(roundf(entry.value)));  // Ganze Zahl fÃ¼r andere Werte
                     }
 
                     AlignRight(buffer);
@@ -2770,7 +3846,7 @@ void TimerPauseReset(const char* aIdentifier, bool aIsRelease)
     if ((strcmp(aIdentifier, "Pause or reset the Timer / set locations / toggle selection window") == 0) && !aIsRelease)
     {
         Vector3 currentPos = MumbleLink->AvatarPosition;
-        QueryPerformanceCounter(&current);
+        //QueryPerformanceCounter(&current);
 
         if (Settings::optionManual)
         {
@@ -2794,6 +3870,9 @@ void TimerPauseReset(const char* aIdentifier, bool aIsRelease)
                     timerRunning = false;
                     pausedElapsedSeconds = 0.0;
                     basePos = currentPos;
+                    originalbasePos = basePos;
+                    manualStartMapID = MumbleLink->Context.MapID;
+                    originalbasePosInitialized = true;
                 }
             }
             else
@@ -2802,8 +3881,12 @@ void TimerPauseReset(const char* aIdentifier, bool aIsRelease)
                 timerRunning = false;
                 pausedElapsedSeconds = 0.0;
                 basePos = currentPos;
+                originalbasePos = basePos;
+                manualStartMapID = MumbleLink->Context.MapID;
+                originalbasePosInitialized = true;
             }
         }
+
         if (Settings::optionCustom)
         {
             if (timerHotkeyCount == 4)
@@ -2819,21 +3902,30 @@ void TimerPauseReset(const char* aIdentifier, bool aIsRelease)
                 timerStartEntered = false;
                 basePos = { -10000.0f, -10000.0f, -10000.0f };
                 pausePos = { -10000.0f, -10000.0f, -10000.0f };
+                originalbasePosInitialized = false;
+                originalpausePosInitialized = false;
                 timerHotkeyCount = 4;
             }
             if (timerHotkeyCount == 2)
             {
                 timerFinishSet = true;
                 pausePos = currentPos;
+                originalpausePos = pausePos;
+                manualFinishMapID = MumbleLink->Context.MapID;
+                originalpausePosInitialized = true;
                 timerHotkeyCount = 3;
             }
             if (timerHotkeyCount == 1)
             {
                 timerStartSet = true;
                 basePos = currentPos;
+                originalbasePos = basePos;
+                manualStartMapID = MumbleLink->Context.MapID;
+                originalbasePosInitialized = true;
                 timerHotkeyCount = 2;
             }
         }
+
         if (Settings::optionPredefined)
         {
             if (timerHotkeyCount == 4)
@@ -3033,9 +4125,17 @@ void AddonOptions()
         Settings::Save(SettingsPath);
         if (!Settings::IsTimerEnabled)
         {
-            timerRunning = false;
-            timerPaused = false;
             basePosInitialized = false;
+            timerFinishSet = false;
+            timerStartSet = false;
+            timerPaused = false;
+            timerRunning = false;
+            timerStartEntered = false;
+            basePos = { -10000.0f, -10000.0f, -10000.0f };
+            pausePos = { -10000.0f, -10000.0f, -10000.0f };
+            originalbasePosInitialized = false;
+            originalpausePosInitialized = false;
+            timerHotkeyCount = 4;
         }
     }
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -3066,7 +4166,7 @@ void AddonOptions()
         Settings::Settings[START_FADING_DISTANCE] = Settings::startFadingDistance;
         Settings::Save(SettingsPath);
     }
-    if (ImGui::DragFloat("CHeckpoint / Finish circle fading distance (300 - 20000 units)", &Settings::finishFadingDistance, 5.0f, 300.0f, 20000.0f, "%.1f units"))
+    if (ImGui::DragFloat("Checkpoint / Finish circle fading distance (300 - 20000 units)", &Settings::finishFadingDistance, 5.0f, 300.0f, 20000.0f, "%.1f units"))
     {
         Settings::Settings[FINISH_FADING_DISTANCE] = Settings::finishFadingDistance;
         Settings::Save(SettingsPath);
@@ -3142,6 +4242,20 @@ void AddonOptions()
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "A vertically aligned ring that sits perpendicular to the ground of start, checkpoints and finish.");
         ImGui::EndTooltip();
     }
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    if (ImGui::SliderFloat("Offset between 0 and 150 units", &Settings::CircleOffset, 0.0f, 150.0f, "%.0f units"))
+    {
+        Settings::Settings[SPEEDOMETER_CIRCLE_OFFSET] = Settings::CircleOffset;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Adjust the vertical offset of the circle centers. Useful to make passing checkpoints visually cohesive if mounted.");
+        ImGui::EndTooltip();
+    }
+
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Set the relative position of the Timer auxiliary window");
@@ -3252,7 +4366,7 @@ void AddonOptions()
     {
         if (Settings::optionCustom)
         {
-            Settings::optionManual = false; Settings::optionPredefined = false;
+            Settings::optionManual = false; Settings::optionPredefined = false; Settings::optionEditor = false;
 
             timerFinishSet = false;
             timerStartSet = false;
@@ -3275,6 +4389,7 @@ void AddonOptions()
         Settings::Settings[IS_OPTION_MANUAL_ENABLED] = Settings::optionManual;
         Settings::Settings[IS_OPTION_PREDEFINED_ENABLED] = Settings::optionPredefined;
         Settings::Settings[IS_OPTION_CUSTOM_ENABLED] = Settings::optionCustom;
+        Settings::Settings[IS_OPTION_EDITOR_ENABLED] = Settings::optionEditor;
         Settings::Save(SettingsPath);
     }
     if (ImGui::IsItemHovered())
@@ -3289,7 +4404,7 @@ void AddonOptions()
     {
         if (Settings::optionPredefined)
         {
-            Settings::optionManual = false; Settings::optionCustom = false;
+            Settings::optionManual = false; Settings::optionCustom = false; Settings::optionEditor = false;
 
             timerPaused = false;
             timerRunning = false;
@@ -3309,6 +4424,7 @@ void AddonOptions()
         Settings::Settings[IS_OPTION_MANUAL_ENABLED] = Settings::optionManual;
         Settings::Settings[IS_OPTION_PREDEFINED_ENABLED] = Settings::optionPredefined;
         Settings::Settings[IS_OPTION_CUSTOM_ENABLED] = Settings::optionCustom;
+        Settings::Settings[IS_OPTION_EDITOR_ENABLED] = Settings::optionEditor;
         Settings::Save(SettingsPath);
     }
     if (ImGui::IsItemHovered())
@@ -3416,6 +4532,7 @@ void AddonOptions()
         Settings::optionFlat = true;
         Settings::optionArc = false;
         Settings::optionRing = false;
+        Settings::CircleOffset = 0.0f;
         Settings::optionPause = true;
         Settings::optionTimerRight = true;
         Settings::optionTimerLeft = false;
@@ -3429,6 +4546,7 @@ void AddonOptions()
         Settings::optionManual = true;
         Settings::optionPredefined = false;
         Settings::optionCustom = false;
+        Settings::optionEditor = false;
 
         Settings::startDiameter = 100.0f;
         Settings::finishDiameter = 200.0f;
@@ -3469,6 +4587,7 @@ void AddonOptions()
         Settings::Settings[IS_OPTION_MANUAL_ENABLED] = Settings::optionManual;
         Settings::Settings[IS_OPTION_PREDEFINED_ENABLED] = Settings::optionPredefined;
         Settings::Settings[IS_OPTION_CUSTOM_ENABLED] = Settings::optionCustom;
+        Settings::Settings[IS_OPTION_EDITOR_ENABLED] = Settings::optionEditor;
         Settings::Settings[START_DIAMETER_UNITS] = Settings::startDiameter;
         Settings::Settings[FINISH_DIAMETER_UNITS] = Settings::finishDiameter;
         Settings::Settings[SPEEDOMETER_TIMER_POSITION_H] = Settings::TimerPositionH;

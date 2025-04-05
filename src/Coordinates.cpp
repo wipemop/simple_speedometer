@@ -4,14 +4,15 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-
-const char* TEST_TEST_DING_DONG = "TestTestDingDong";
+#include <unordered_map>
 
 namespace Coordinates
 {
     std::mutex Mutex;
     std::unordered_map<std::string, CoordinateSet> CoordinateSets;
     std::vector<std::string> SetNames;
+
+    ordered_json CoordinateData = ordered_json::object();
 
     // Internal coordinate sets used to provide the user with valid data if the coordinates.json was missing or invalid.
     std::unordered_map<std::string, CoordinateSet> InternalCoordinateSets = {
@@ -68,17 +69,61 @@ namespace Coordinates
 
     std::vector<std::string> FilteredSetNames;
 
-    // Updating the filered list of names based on Map ID with either internal or external data
+    // Filtering by Map Id has a flaw, in that guild halls have different IDs for the different playercount thresholds even though they're geometrically the same. These can be group and assigned to a custom ID in order to make Coordinate Sets creeated in one of them available to all of them.
+    const std::unordered_map<int, int> MAP_ID_GROUPS =
+    {
+    // Gilded Hollow map ID group
+    {1068, 99991},
+    {1101, 99991},
+    {1107, 99991},
+    {1108, 99991},
+    {1121, 99991},
+
+    // Gilded Hollow map ID group
+    {1069, 99992},
+    {1071, 99992},
+    {1076, 99992},
+    {1104, 99992},
+    {1124, 99992},
+
+    // Windswept Haven map ID group
+    {1214, 99993}, 
+    {1215, 99993},
+    {1224, 99993},
+    {1232, 99993},
+    {1243, 99993},
+    {1250, 99993},
+
+    // Isle of Reflection map ID group
+    {1419, 99994},
+    {1426, 99994},
+    {1435, 99994},
+    {1444, 99994},
+    {1462, 99994}
+    };
+
+    // Checking if the Map ID is part of a group and returning the group ID if that is the case. Otherwise keep the Map ID
+    int GetGroupMapID(int mapID)
+    {
+        auto it = MAP_ID_GROUPS.find(mapID);
+        if (it != MAP_ID_GROUPS.end())
+            return it->second;
+        return mapID;
+    }
+
+    // Updating the filered list of names based on Map ID or group ID with either internal or external data
     void UpdateFilteredSetNames(int currentMapID)
     {
         std::lock_guard<std::mutex> lock(Mutex);
         FilteredSetNames.clear();
 
+        int groupedMapID = GetGroupMapID(currentMapID);
+
         if (!SetNames.empty())
         {
             for (const auto& name : SetNames)
             {
-                if (CoordinateSets.at(name).MapID == currentMapID)
+                if (GetGroupMapID(CoordinateSets.at(name).MapID) == groupedMapID)
                     FilteredSetNames.push_back(name);
             }
         }
@@ -87,7 +132,7 @@ namespace Coordinates
         {
             for (const auto& name : InternalSetNames)
             {
-                if (InternalCoordinateSets.at(name).MapID == currentMapID)
+                if (GetGroupMapID(InternalCoordinateSets.at(name).MapID) == groupedMapID)
                     FilteredSetNames.push_back(name);
             }
         }
@@ -109,6 +154,7 @@ namespace Coordinates
         return nullptr;
     }
 
+    // Load function to read the coordinates.json, it will also handle the creation of a coordinates.json or example_coordinates.json if it was not found or was found to be corrupted
     void Load(const std::filesystem::path& aPath)
     {
         // This data block is used to recreate the coordinates.json when it was missing, or the example_coordinates.json if the coordinates.json was invalid.
@@ -153,6 +199,7 @@ namespace Coordinates
             }}
         };
 
+        // Check for exisiting coordinates.json
         if (!std::filesystem::exists(aPath))
         {
             APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Missing coordinates.json! Creating coordinates.json with internal data.");
@@ -167,6 +214,7 @@ namespace Coordinates
 
         std::lock_guard<std::mutex> lock(Mutex);
 
+        // Attempting to read
         try
         {
             std::ifstream file(aPath);
@@ -177,6 +225,7 @@ namespace Coordinates
             CoordinateSets.clear();
             SetNames.clear();
 
+            // If the "Sets" data block is damaged for example due to missing brackets, create example_coordinates.json
             if (!j.contains("Sets") || !j["Sets"].is_object())
             {
                 APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Invalid format in coordinates.json!");
@@ -189,6 +238,7 @@ namespace Coordinates
                 return;
             }
 
+            // Reading the json data
             for (auto& [key, value] : j["Sets"].items())
             {
                 CoordinateSet set{};
@@ -231,6 +281,8 @@ namespace Coordinates
                 SetNames.push_back(key);
             }
         }
+
+        // Catching parsing issues and creating example_coordinates.json if parsing errors occured
         catch (nlohmann::json::parse_error& ex)
         {
             APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Error parsing coordinates.json!");
@@ -243,5 +295,76 @@ namespace Coordinates
         }
     }
 
-    bool TestedTheDingDong = true;
+    // Save function, possibly oprhaned? It lives here for now until i learn to properly split up my code into different cpp's, my entry.cpp is stuffed to the brim and really needs a code diet
+    void Save(const std::filesystem::path& aPath)
+    {
+        std::lock_guard<std::mutex> lock(Coordinates::Mutex);
+
+        ordered_json coordinateData;
+        if (std::filesystem::exists(aPath))
+        {
+            std::ifstream file(aPath);
+            try
+            {
+                file >> coordinateData;
+            }
+            catch (const std::exception&)
+            {
+                coordinateData = ordered_json::object();
+            }
+            file.close();
+        }
+
+        if (!coordinateData.contains("Sets") || !coordinateData["Sets"].is_object())
+        {
+            coordinateData["Sets"] = ordered_json::object();
+        }
+
+        for (const auto& [name, set] : Coordinates::CoordinateSets)
+        {
+            ordered_json setData = ordered_json::object();
+
+            setData["MapID"] = set.MapID;
+
+            auto round4 = [](double value) {
+                return std::round(value * 10000.0) / 10000.0;
+                };
+
+            setData["Start"] = {
+                { "x", round4(set.Start.x) },
+                { "y", round4(set.Start.y) },
+                { "z", round4(set.Start.z) }
+            };
+
+            setData["Startradius"] = round4(set.StartRadius);
+
+            ordered_json checkpoints = ordered_json::array();
+            for (const auto& checkpoint : set.Checkpoints)
+            {
+                ordered_json checkpointData = ordered_json::object();
+                checkpointData["Position"] = {
+                    { "x", round4(checkpoint.Position.x) },
+                    { "y", round4(checkpoint.Position.y) },
+                    { "z", round4(checkpoint.Position.z) }
+                };
+                checkpointData["Radius"] = round4(checkpoint.Radius);
+                checkpoints.push_back(checkpointData);
+            }
+            setData["Checkpoints"] = checkpoints;
+
+            setData["End"] = {
+                { "x", round4(set.End.x) },
+                { "y", round4(set.End.y) },
+                { "z", round4(set.End.z) }
+            };
+
+            setData["Endradius"] = round4(set.EndRadius);
+
+            coordinateData["Sets"][name] = setData;
+        }
+
+        std::ofstream outFile(aPath);
+        outFile << coordinateData.dump(1, '\t') << std::endl;
+        outFile.close();
+    }
 }

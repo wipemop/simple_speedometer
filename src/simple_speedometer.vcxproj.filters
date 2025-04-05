@@ -112,7 +112,9 @@
     <Image Include="timer_stopwatch.png">
       <Filter>resources</Filter>
     </Image>
-    <Image Include="timer_indicators.png" />
+    <Image Include="timer_indicators.png">
+      <Filter>resources</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">

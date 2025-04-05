@@ -25,6 +25,7 @@ const char* FINISH_FADING_DISTANCE = "FinishFadingDistance";
 const char* CIRCLE_STYLE_FLAT = "CircleStyleFlat";
 const char* CIRCLE_STYLE_ARC = "CircleStyleArc";
 const char* CIRCLE_STYLE_RING = "CircleStyleRing";
+const char* SPEEDOMETER_CIRCLE_OFFSET = "SpeedometerCircleOffset";
 const char* TIMER_AUX_RIGHT_ALIGNED = "TimerAuxRightAligned";
 const char* TIMER_AUX_LEFT_ALIGNED = "TimerAuxLeftAligned";
 const char* TIMER_AUX_TOP_ALIGNED = "TimerAuxTopAligned";
@@ -35,6 +36,7 @@ const char* MANUAL_START_DIAMETER_UNITS = "ManualStartDiameterUnits";
 const char* IS_OPTION_MANUAL_ENABLED = "IsOptionManualEnabled";
 const char* IS_OPTION_PREDEFINED_ENABLED = "IsOptionPredefinedEnabled";
 const char* IS_OPTION_CUSTOM_ENABLED = "IsOptionCustomEnabled";
+const char* IS_OPTION_EDITOR_ENABLED = "IsOptionEditorEnabled";
 const char* START_DIAMETER_UNITS = "StartDiameterUnits";
 const char* FINISH_DIAMETER_UNITS = "FinishDiameterUnits";
 const char* PREDEF_TIMER_SET = "PredefTimerSet";
@@ -155,6 +157,10 @@ namespace Settings
 		{
 			Settings[CIRCLE_STYLE_RING].get_to<bool>(optionRing);
 		}
+		if (!Settings[SPEEDOMETER_CIRCLE_OFFSET].is_null())
+		{
+			Settings[SPEEDOMETER_CIRCLE_OFFSET].get_to<float>(CircleOffset);
+		}
 		if (!Settings[TIMER_AUX_RIGHT_ALIGNED].is_null())
 		{
 			Settings[TIMER_AUX_RIGHT_ALIGNED].get_to<bool>(optionTimerRight);
@@ -194,6 +200,10 @@ namespace Settings
 		if (!Settings[IS_OPTION_CUSTOM_ENABLED].is_null())
 		{
 			Settings[IS_OPTION_CUSTOM_ENABLED].get_to<bool>(optionCustom);
+		}
+		if (!Settings[IS_OPTION_EDITOR_ENABLED].is_null())
+		{
+			Settings[IS_OPTION_EDITOR_ENABLED].get_to<bool>(optionEditor);
 		}
 		if (!Settings[START_DIAMETER_UNITS].is_null())
 		{
@@ -268,6 +278,7 @@ namespace Settings
 	bool optionFlat = true;
 	bool optionArc = false;
 	bool optionRing = false;
+	float CircleOffset = 0.0f;
 	bool optionPause = true;
 	bool optionStop = false;
 	bool optionTimerRight = true;
@@ -278,6 +289,7 @@ namespace Settings
 	bool optionManual = true;
 	bool optionPredefined = false;
 	bool optionCustom = false;
+	bool optionEditor = false;
 	float startDiameter = 100.0f;
 	float finishDiameter = 200.0f;
 	int selectedPredefSet = 0;
