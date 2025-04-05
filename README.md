@@ -1,5 +1,5 @@
 # Finalized version uploaded as v1.1.
-The plugin is considered feature-complete (for now anyway), and will be henceforth available for a direct download from the Nexus library soon!
+The plugin is considered feature-complete (for now anyway), and will henceforth be available for a direct download from the Nexus library (soonTM)!
 
 ## Guidance available by clicking the following links
 A general overview over the settings and all there is to know about the Speedometer:
@@ -26,7 +26,7 @@ Unfortunately there have been some cases of false positive detections by Antivir
 
 As always never blindly trust a random person on the internet, so if you want to really make sure that it is safe, please feel free to read through the code and compiling it locally instead of loading the .dll from here or Nexus.
 
-##Incompetence disclaimer
+## Incompetence disclaimer
 I made this plugin for fun using my own ideas. But to translate them into code i had to make heavy use of ChatGPT. As such the code will likely not measure up to certain standards or conjectures, and I am sorry for all the coders that might turn in their graves.
 
 ### Thanks a lot for your understanding. I hope you will have a use for this, and fun doing so!
