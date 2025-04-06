@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <windows.h>
+#include "nlohmann/json.hpp"
 #include <unordered_map>
 
 namespace Coordinates
@@ -13,59 +15,6 @@ namespace Coordinates
     std::vector<std::string> SetNames;
 
     ordered_json CoordinateData = ordered_json::object();
-
-    // Internal coordinate sets used to provide the user with valid data if the coordinates.json was missing or invalid.
-    std::unordered_map<std::string, CoordinateSet> InternalCoordinateSets = {
-        {"Homestead - Waypoint to Garden", {
-            {117.5147f, 15.6019f, -49.4975f},  // Start
-            {98.5192f, 16.7772f, -62.2833f},   // End
-            100.0f,  // Start-Radius
-            200.0f,  // End-Radius
-            1558,    // MapID
-            {   // Checkpoints
-                {{104.1501f, 15.2401f, -41.4597f}, 150.0f},
-                {{133.8676f, 16.8978f, -63.1641f}, 150.0f},
-                {{114.5097f, 23.8542f, -95.9121f}, 150.0f}
-            }
-        }},
-        {"Caledon Forest - Morgan's Spiral", {
-            {474.8509f, 0.5672f, -709.2817f},   // Start
-            {442.0647f, 45.0707f, -626.8521f},    // End
-            150.0f,  // Start-Radius
-            170.0f,  // End-Radius
-            34,      // MapID
-            {   // Checkpoints
-                {{465.1118f, 19.7697f, -684.5453f}, 71.0f},
-                {{467.1163f, 23.4168f, -723.1299f}, 71.0f},
-                {{468.1608f, 42.2680f, -715.9031f}, 71.0f},
-                {{446.3679f, 46.7695f, -675.4959f}, 71.0f}
-            }
-        }},
-        {"Homestead - Waypoint to other Garden", {
-            {117.5147f, 15.6019f, -49.4975f},  // Start
-            {135.6939f, 16.8608f, -84.2182f},  // End
-            150.0f,  // Start-Radius
-            300.0f,  // End-Radius
-            1558,    // MapID
-            {   // Checkpoints
-                {{104.1501f, 15.2401f, -41.4597f}, 150.0f},
-                {{99.5831f, 16.7137f, -83.3961f}, 150.0f}
-            }
-        }}
-    };
-
-    // Creating the set names from internal data
-    std::vector<std::string> GetInternalSetNames()
-    {
-        std::vector<std::string> names;
-        for (const auto& pair : InternalCoordinateSets)
-        {
-            names.push_back(pair.first);
-        }
-        return names;
-    }
-
-    std::vector<std::string> InternalSetNames = GetInternalSetNames();
 
     std::vector<std::string> FilteredSetNames;
 
@@ -111,7 +60,7 @@ namespace Coordinates
         return mapID;
     }
 
-    // Updating the filered list of names based on Map ID or group ID with either internal or external data
+    // Updating the filered list of names based on Map ID or group ID
     void UpdateFilteredSetNames(int currentMapID)
     {
         std::lock_guard<std::mutex> lock(Mutex);
@@ -130,11 +79,7 @@ namespace Coordinates
 
         if (FilteredSetNames.empty())
         {
-            for (const auto& name : InternalSetNames)
-            {
-                if (GetGroupMapID(InternalCoordinateSets.at(name).MapID) == groupedMapID)
-                    FilteredSetNames.push_back(name);
-            }
+            
         }
     }
 
@@ -148,65 +93,106 @@ namespace Coordinates
         auto it = CoordinateSets.find(selectedName);
         if (it != CoordinateSets.end())
             return &it->second;
-        auto itInternal = InternalCoordinateSets.find(selectedName);
-        if (itInternal != InternalCoordinateSets.end())
-            return &itInternal->second;
         return nullptr;
     }
 
-    // Load function to read the coordinates.json, it will also handle the creation of a coordinates.json or example_coordinates.json if it was not found or was found to be corrupted
+    // Load function to read the coordinates.json, it will also handle the creation of a coordinates.json if it was not found
     void Load(const std::filesystem::path& aPath)
     {
-        // This data block is used to recreate the coordinates.json when it was missing, or the example_coordinates.json if the coordinates.json was invalid.
-        nlohmann::ordered_json exampleJson = {
-            {"Sets", {
-                {"Homestead - Waypoint to Garden", {
-                    {"MapID", 1558},
-                    {"Start", { {"x", 117.5147}, {"y", 15.6019}, {"z", -49.4975} }},
-                    {"Startradius", 100.0},
-                    {"Checkpoints", {
-                        { {"Position", {{"x", 104.1501}, {"y", 15.2401}, {"z", -41.4597}}}, {"Radius", 150.0} },
-                        { {"Position", {{"x", 133.8676}, {"y", 16.8978}, {"z", -63.1641}}}, {"Radius", 150.0} },
-                        { {"Position", {{"x", 114.5097}, {"y", 23.8542}, {"z", -95.9121}}}, {"Radius", 150.0} }
-                    }},
-                    {"End", { {"x", 98.5192}, {"y", 16.7772}, {"z", -62.2833} }},
-                    {"Endradius", 200.0}
-                }},
-                {"Homestead - Waypoint to other Garden", {
-                    {"MapID", 1558},
-                    {"Start", { {"x", 117.5147}, {"y", 15.6019}, {"z", -49.4975} }},
-                    {"Startradius", 150.0},
-                    {"Checkpoints", {
-                        { {"Position", {{"x", 104.1501}, {"y", 15.2401}, {"z", -41.4597}}}, {"Radius", 150.0} },
-                        { {"Position", {{"x", 99.5831}, {"y", 16.7137}, {"z", -83.3961}}}, {"Radius", 150.0} }
-                    }},
-                    {"End", { {"x", 135.6939}, {"y", 16.8608}, {"z", -84.2182} }},
-                    {"Endradius", 300.0}
-                }},
-                {"Morgan's Spiral", {
-                    {"MapID", 34},
-                    {"Start", { {"x", 474.8509}, {"y", 0.5672}, {"z", -709.2817} }},
-                    {"Startradius", 150.0},
-                    {"Checkpoints", {
-                        { {"Position", {{"x", 465.1118}, {"y", 19.7697}, {"z", -684.5453}}}, {"Radius", 71.0} },
-                        { {"Position", {{"x", 467.1163}, {"y", 23.4168}, {"z", -723.1299}}}, {"Radius", 71.0} },
-                        { {"Position", {{"x", 468.1608}, {"y", 42.2680}, {"z", -715.9031}}}, {"Radius", 71.0} },
-                        { {"Position", {{"x", 446.3679}, {"y", 46.7695}, {"z", -675.4959}}}, {"Radius", 71.0} }
-                    }},
-                    {"End", { {"x", 442.0647}, {"y", 45.0707}, {"z", -626.8521} }},
-                    {"Endradius", 170.0}
-                }}
-            }}
-        };
+        // Helper lambda to extract the resource data from which the coordinates.json will be created as std::string
+        auto getResourceContent = []() -> std::string
+            {
+                HMODULE hModule = nullptr;
+                if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, reinterpret_cast<LPCTSTR>(&Load), &hModule))
+                {
+                    APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Could not obtain DLL module handle.");
+                    return "";
+                }
 
-        // Check for exisiting coordinates.json
+                HRSRC hResource = FindResource(hModule, MAKEINTRESOURCE(115), "json");
+                if (!hResource)
+                {
+                    APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Resource not found (ID 115, type json).");
+                    return "";
+                }
+
+                HGLOBAL hLoaded = LoadResource(hModule, hResource);
+                if (!hLoaded)
+                {
+                    APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Failed to load resource.");
+                    return "";
+                }
+
+                DWORD resSize = SizeofResource(hModule, hResource);
+                void* pResourceData = LockResource(hLoaded);
+                if (!pResourceData || resSize == 0)
+                {
+                    APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Failed to access resource data.");
+                    return "";
+                }
+
+                return std::string(static_cast<const char*>(pResourceData), resSize);
+            };
+
+        std::string resourceContent = getResourceContent();
+
+        if (resourceContent.empty())
+        {
+            APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Resource content empty. This is theoretically impossible - redownload the plugin just in case.");
+            
+            // Using internal data from code as fallback if the resource appears to be inaccessible (disabled for now but kept around in case of later use)
+            /*
+            resourceContent = nlohmann::ordered_json{
+                {"Sets", {
+                    {"I failed loading internal resource data", {
+                        {"MapID", 1558},
+                        {"Start", { {"x", 117.5147}, {"y", 15.6019}, {"z", -49.4975} }},
+                        {"Startradius", 100.0},
+                        {"Checkpoints", {
+                            { {"Position", {{"x", 104.1501}, {"y", 15.2401}, {"z", -41.4597}}}, {"Radius", 150.0} },
+                            { {"Position", {{"x", 133.8676}, {"y", 16.8978}, {"z", -63.1641}}}, {"Radius", 150.0} },
+                            { {"Position", {{"x", 114.5097}, {"y", 23.8542}, {"z", -95.9121}}}, {"Radius", 150.0} }
+                        }},
+                        {"End", { {"x", 98.5192}, {"y", 16.7772}, {"z", -62.2833} }},
+                        {"Endradius", 200.0}
+                    }},
+                    {"Unfortunately the developer did an oopsie", {
+                        {"MapID", 1558},
+                        {"Start", { {"x", 117.5147}, {"y", 15.6019}, {"z", -49.4975} }},
+                        {"Startradius", 150.0},
+                        {"Checkpoints", {
+                            { {"Position", {{"x", 104.1501}, {"y", 15.2401}, {"z", -41.4597}}}, {"Radius", 150.0} },
+                            { {"Position", {{"x", 99.5831}, {"y", 16.7137}, {"z", -83.3961}}}, {"Radius", 150.0} }
+                        }},
+                        {"End", { {"x", 135.6939}, {"y", 16.8608}, {"z", -84.2182} }},
+                        {"Endradius", 300.0}
+                    }},
+                    {"Please report this to my maker", {
+                        {"MapID", 1558},
+                        {"Start", { {"x", 474.8509}, {"y", 0.5672}, {"z", -709.2817} }},
+                        {"Startradius", 150.0},
+                        {"Checkpoints", {
+                            { {"Position", {{"x", 465.1118}, {"y", 19.7697}, {"z", -684.5453}}}, {"Radius", 71.0} },
+                            { {"Position", {{"x", 467.1163}, {"y", 23.4168}, {"z", -723.1299}}}, {"Radius", 71.0} },
+                            { {"Position", {{"x", 468.1608}, {"y", 42.2680}, {"z", -715.9031}}}, {"Radius", 71.0} },
+                            { {"Position", {{"x", 446.3679}, {"y", 46.7695}, {"z", -675.4959}}}, {"Radius", 71.0} }
+                        }},
+                        {"End", { {"x", 442.0647}, {"y", 45.0707}, {"z", -626.8521} }},
+                        {"Endradius", 170.0}
+                    }}
+                }}
+            }.dump(4);
+            */
+        }
+
+        // If the coordinates.json didn't exist it'l be created using the resource content
         if (!std::filesystem::exists(aPath))
         {
-            APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Missing coordinates.json! Creating coordinates.json with internal data.");
+            APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Missing coordinates.json! Creating coordinates.json with resource data.");
             std::ofstream exampleFile(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json"));
             if (exampleFile.is_open())
             {
-                exampleFile << exampleJson.dump(4);
+                exampleFile << resourceContent;
                 exampleFile.close();
             }
             return;
@@ -214,7 +200,7 @@ namespace Coordinates
 
         std::lock_guard<std::mutex> lock(Mutex);
 
-        // Attempting to read
+        // Attempting to parse an existing coordinates.json
         try
         {
             std::ifstream file(aPath);
@@ -225,14 +211,14 @@ namespace Coordinates
             CoordinateSets.clear();
             SetNames.clear();
 
-            // If the "Sets" data block is damaged for example due to missing brackets, create example_coordinates.json
+            // If the "Sets" data block is damaged, an example_coordinates.json will be created
             if (!j.contains("Sets") || !j["Sets"].is_object())
             {
                 APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Invalid format in coordinates.json!");
                 std::ofstream exampleFile(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/example_coordinates.json"));
                 if (exampleFile.is_open())
                 {
-                    exampleFile << exampleJson.dump(4);
+                    exampleFile << resourceContent;
                     exampleFile.close();
                 }
                 return;
@@ -282,14 +268,14 @@ namespace Coordinates
             }
         }
 
-        // Catching parsing issues and creating example_coordinates.json if parsing errors occured
+        // In case of parsing errors an example_coordinates.json will be created
         catch (nlohmann::json::parse_error& ex)
         {
-            APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Error parsing coordinates.json!");
+            APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "Error parsing coordinates.json! An example_coordinates.json will be created. Check formatting of your Coordinate Sets in the coordinates.json, look for missing or superfluous brackets, dots or quotation marks, rogue letters and digits.");
             std::ofstream exampleFile(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/example_coordinates.json"));
             if (exampleFile.is_open())
             {
-                exampleFile << exampleJson.dump(4);
+                exampleFile << resourceContent;
                 exampleFile.close();
             }
         }

@@ -217,6 +217,9 @@
   <ItemGroup>
     <Font Include="crash-a-like.ttf" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="coordinates.json" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

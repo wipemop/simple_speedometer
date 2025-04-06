@@ -137,6 +137,8 @@ float g_checkpointdistance = 0.0f;
 
 int selectedIndex = 0;
 bool wasJsonMissing = true;
+bool wasWarningPopped = false;
+static double warningNextPopTime = 0.0;
 bool useExternalSets = false;
 int currentCheckpointIndex = 0;
 Vector3 checkpointPos = { 0.0f, 0.0f, 0.0f };
@@ -1046,8 +1048,8 @@ void UpdateTimer()
             }
         }
 
-        // Storing the internal / external coordinate set data in variables for use in the rendering update functions
-        if (Settings::optionPredefined)
+        // Storing the Coordinate Set data in variables for use in the rendering update functions
+        if (Settings::optionPredefined && !wasJsonMissing && !Coordinates::SetNames.empty())
         {
             const Coordinates::CoordinateSet* selectedSet = Coordinates::GetSelectedCoordinateSet();
             if (selectedSet)
@@ -1114,7 +1116,17 @@ void UpdateTimer()
             }
             else
             {
-                APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "No valid coordinate set selected.");
+                double warningPopDelay = 1.0;
+                if (!wasWarningPopped)
+                {
+                    APIDefs->Log(ELogLevel_WARNING, "Simple Speedometer", "No valid coordinate set selected! Check formatting of your Coordinate Sets in the coordinates.json, look for missing or superfluous brackets, dots or quotation marks, rogue letters and digits. If this warning only pops once upon loading the plugin or entering Predefined Timer mode, or stops popping after loading a character, it can be ignored.");
+                    wasWarningPopped = true;
+                    warningNextPopTime = ImGui::GetTime() + warningPopDelay;
+                }
+                if (ImGui::GetTime() >= warningNextPopTime)
+                {
+                    wasWarningPopped = false;
+                }
             }
         }
 
@@ -2244,6 +2256,17 @@ void RenderTimerWindow()
                 ImGui::SameLine();
                 ImGui::AlignTextToFramePadding();
 
+                // Cycling the load function to make sure coordinates.json gets loaded even if it was created due to first load
+                if (!Coordinates::SetNames.empty() && wasJsonMissing)
+                {
+                    wasJsonMissing = false;
+                }
+                if (Coordinates::SetNames.empty() && wasJsonMissing)
+                {
+                    Coordinates::Load(CoordinatesPath);
+                    Coordinates::UpdateFilteredSetNames(currentMapID);
+                }
+
                 // Display of the coordinates.json data status
                 if (Coordinates::SetNames.empty() && !wasJsonMissing)
                 {
@@ -2263,7 +2286,6 @@ void RenderTimerWindow()
                 }
 
                 ImGui::SameLine(378.0f, 0.0f);
-
 
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
@@ -2290,45 +2312,49 @@ void RenderTimerWindow()
 
                 ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "Choose a coordinate set:");
 
-                ImGui::SameLine(378.0f, 0.0f);
-
-
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
-
                 // Editor button
-                if (ImGui::Button("Set editor"))
+                if (!Coordinates::SetNames.empty() && !wasJsonMissing)
                 {
-                    EDTR_IsOpen = !EDTR_IsOpen;
+                    ImGui::SameLine(378.0f, 0.0f);
 
-                    if (EDTR_IsOpen)
+
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.0f, 1.0f));
+
+                    if (ImGui::Button("Set editor"))
                     {
-                        if (std::filesystem::exists(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json")))
+                        EDTR_IsOpen = !EDTR_IsOpen;
+
+                        if (EDTR_IsOpen)
                         {
-                            basePosInitialized = false;
+                            if (std::filesystem::exists(APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json")))
+                            {
+                                basePosInitialized = false;
 
-                            timerFinishSet = false;
-                            timerStartSet = false;
-                            timerPaused = false;
-                            timerRunning = false;
-                            timerStartEntered = false;
-                            basePos = { -10000.0f, -10000.0f, -10000.0f };
-                            basePosInitialized = false;
-                            pausePos = { -10000.0f, -10000.0f, -10000.0f };
+                                timerFinishSet = false;
+                                timerStartSet = false;
+                                timerPaused = false;
+                                timerRunning = false;
+                                timerStartEntered = false;
+                                basePos = { -10000.0f, -10000.0f, -10000.0f };
+                                basePosInitialized = false;
+                                pausePos = { -10000.0f, -10000.0f, -10000.0f };
 
-                            EDTR_FreshOpen = true;
+                                EDTR_FreshOpen = true;
 
-                            wasJsonMissing = false;
-                            Coordinates::Load(CoordinatesPath);
-                            Coordinates::UpdateFilteredSetNames(currentMapID);
+                                wasJsonMissing = false;
+                                Coordinates::Load(CoordinatesPath);
+                                Coordinates::UpdateFilteredSetNames(currentMapID);
 
-                            EDTR_LoadCoordinates();
+                                EDTR_LoadCoordinates();
+                            }
                         }
                     }
+
+                    ImGui::PopStyleColor(4);
                 }
-                ImGui::PopStyleColor(4);
 
                 // Editor window status handling
                 if (EDTR_IsOpen)

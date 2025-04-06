@@ -39,9 +39,6 @@ namespace Coordinates
 
 	extern ordered_json CoordinateData;
 
-	extern std::unordered_map<std::string, CoordinateSet> InternalCoordinateSets;
-	extern std::vector<std::string> InternalSetNames;
-
 	extern std::vector<std::string> FilteredSetNames;
 
 	void Load(const std::filesystem::path& aPath);

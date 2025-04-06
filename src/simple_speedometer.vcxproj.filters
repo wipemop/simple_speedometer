@@ -126,4 +126,7 @@
       <Filter>resources</Filter>
     </Font>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="coordinates.json" />
+  </ItemGroup>
 </Project>
