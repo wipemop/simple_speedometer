@@ -1,5 +1,5 @@
 # Finalized version uploaded as v1.1.
-The plugin is considered feature-complete (for now anyway), and will henceforth be available for a direct download from the Nexus library (soonTM)!
+The plugin is considered feature-complete (for now anyway), and is henceforth be available for a direct download from the Nexus library (as of today, April 10th, 2025 - just in time for SAB)
 
 ## Guidance available by clicking the following links
 A general overview over the settings and all there is to know about the Speedometer:
