@@ -222,7 +222,7 @@ extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
     AddonDef.Version.Major = 1;
     AddonDef.Version.Minor = 1;
     AddonDef.Version.Build = 1;
-    AddonDef.Version.Revision = 4;
+    AddonDef.Version.Revision = 5;
     AddonDef.Author = "Toxxa";
     AddonDef.Description = "A lightly customizable Speedometer and movement-triggered Timer system.";
     AddonDef.Load = AddonLoad;
