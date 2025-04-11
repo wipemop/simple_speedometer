@@ -224,14 +224,14 @@ extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
     AddonDef.Version.Build = 1;
     AddonDef.Version.Revision = 2;
     AddonDef.Author = "Toxxa";
-    AddonDef.Description = "A lightly customizeable Speedometer and movement-triggered Timer system.";
+    AddonDef.Description = "A lightly customizable Speedometer and movement-triggered Timer system.";
     AddonDef.Load = AddonLoad;
     AddonDef.Unload = AddonUnload;
     AddonDef.Flags = EAddonFlags_None;
 
     /* not necessary if hosted on Raidcore, but shown anyway for the example also useful as a backup resource */
-    //AddonDef.Provider = EUpdateProvider_GitHub;
-    //AddonDef.UpdateLink = "https://github.com/RaidcoreGG/GW2Nexus-AddonTemplate";
+    AddonDef.Provider = EUpdateProvider_GitHub;
+    AddonDef.UpdateLink = "https://github.com/wipemop/simple_speedometer";
 
     return &AddonDef;
 }
