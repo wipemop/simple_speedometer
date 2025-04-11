@@ -221,8 +221,8 @@ extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
     AddonDef.Name = "Simple Speedometer";
     AddonDef.Version.Major = 1;
     AddonDef.Version.Minor = 1;
-    AddonDef.Version.Build = 0;
-    AddonDef.Version.Revision = 1;
+    AddonDef.Version.Build = 1;
+    AddonDef.Version.Revision = 2;
     AddonDef.Author = "Toxxa";
     AddonDef.Description = "A lightly customizeable Speedometer and movement-triggered Timer system.";
     AddonDef.Load = AddonLoad;
@@ -1763,13 +1763,15 @@ void RenderTimerWindow()
             {
                 elapsedSeconds = static_cast<double>(current.QuadPart - timerStart.QuadPart) / frequency.QuadPart;
 
-                // Since the only way to stop the timer is standing still and manually resetting it, this will make it force-restart before reaching the maximum reading of 99:59.999, otherwise the minutes counter would get funky and show the first two digits of the then triple digit minute count. Surely nobody keeps it running for over one hour and fourty minutes straight, right? ...right?
+                // Since the only way to stop the timer is standing still and manually resetting it in Manual mode or reachingf the finish in Custom or Predefined mode, this will make it force-restart before reaching the maximum reading of 99:59.999, otherwise the minutes counter would get funky and show the first two digits of the then triple digit minute count. Surely nobody keeps it running for over one hour and fourty minutes straight, right? ...right?
+                /*
                 if (elapsedSeconds >= 5999.983)
                 {
                     timerRunning = false;
                     timerPaused = false;
                     basePosInitialized = false;
                 }
+                */
             }
             else if (timerPaused)
             {
@@ -1780,6 +1782,10 @@ void RenderTimerWindow()
             unsigned long minutes = static_cast<unsigned long>(elapsedSeconds / 60.0);
             unsigned long seconds = static_cast<unsigned long>(fmod(elapsedSeconds, 60.0));
             unsigned long milliseconds = static_cast<unsigned long>((elapsedSeconds - (minutes * 60 + seconds)) * 1000.0);
+
+            // Ensuring the minutes value smoothly rolls over back to 0 once a full hour has passed, without intefering with the seconds and milliseconds values
+            unsigned long fullHours = static_cast<unsigned long>(elapsedSeconds / 3600.0);
+            minutes -= fullHours * 60;
 
             // Handling timer position and size through the sliders in the settings
             ImVec2 TimerPos = ImVec2(Settings::TimerPositionH, Settings::TimerPositionV);
