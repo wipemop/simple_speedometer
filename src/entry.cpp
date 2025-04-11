@@ -2131,6 +2131,7 @@ void RenderTimerWindow()
                 ImGui::Begin("Custom Timer info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
                 ImGui::PushFont((ImFont*)fontptr);
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
 
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.0f, 1.0f), "Custom Timer status info:");
                 ImGui::SameLine(350.0f, 0.0f);
@@ -2252,6 +2253,7 @@ void RenderTimerWindow()
                 ImGui::Begin("Set selection", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
                 ImGui::PushFont((ImFont*)fontptr);
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
 
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.0f, 1.0f), "Predefined Timer settings:");
                 ImGui::SameLine(382.0f, 0.0f);
@@ -2444,6 +2446,7 @@ void RenderTimerWindow()
                 ImGui::Begin("Map info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
                 ImGui::PushFont((ImFont*)fontptr);
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Map ID:");
                 ImGui::SameLine(80.0f, 0.0f);
@@ -2659,6 +2662,8 @@ void EDTR_ShowMenu()
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2f, 0.075f, 0.0f, 1.0f));
 
     ImGui::Begin("Coordinate Set Editor", &EDTR_IsOpen, ImGuiWindowFlags_AlwaysAutoResize);
+
+    ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
 
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
@@ -3666,6 +3671,7 @@ void AddonRender()
                 ImGui::Begin("##Data chart", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs );
 
                 ImGui::PushFont((ImFont*)fontptr);
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
 
                 ImGui::BeginTable("SpeedTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit);
                 ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 175.0f);
