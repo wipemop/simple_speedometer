@@ -221,8 +221,8 @@ extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
     AddonDef.Name = "Simple Speedometer";
     AddonDef.Version.Major = 1;
     AddonDef.Version.Minor = 1;
-    AddonDef.Version.Build = 1;
-    AddonDef.Version.Revision = 5;
+    AddonDef.Version.Build = 2;
+    AddonDef.Version.Revision = 1;
     AddonDef.Author = "Toxxa";
     AddonDef.Description = "A lightly customizable Speedometer and movement-triggered Timer system.";
     AddonDef.Load = AddonLoad;
@@ -1178,8 +1178,8 @@ void UpdateTimer()
             if (startcirclealpha < 0.0f) startcirclealpha = 0.0f;
         }
 
-        float selfclosestartFadingStart = (Settings::optionPredefined ? startRadius : Settings::startDiameter) / conversionFactor_u_s + 5.0f;
-        float selfclosestartFadingEnd = (Settings::optionPredefined ? startRadius : Settings::startDiameter) / conversionFactor_u_s + 10.0f;
+        float selfclosestartFadingStart = ((Settings::optionPredefined ? startRadius : Settings::startDiameter) + Settings::selfFadingDistance) / conversionFactor_u_s;
+        float selfclosestartFadingEnd = ((Settings::optionPredefined ? startRadius : Settings::startDiameter) + Settings::selfFadingDistance) / conversionFactor_u_s + 2.0f;
         float selfclosestartalpha = 1.0f;
         if (basedistance > selfclosestartFadingStart)
         {
@@ -1187,8 +1187,8 @@ void UpdateTimer()
             if (selfclosestartalpha < 0.0f) selfclosestartalpha = 0.0f;
         }
 
-        float selfclosemanualstartFadingStart = Settings::manualstartDiameter / conversionFactor_u_s + 5.0f;
-        float selfclosemanualstartFadingEnd = Settings::manualstartDiameter / conversionFactor_u_s + 10.0f;
+        float selfclosemanualstartFadingStart = (Settings::manualstartDiameter + Settings::selfFadingDistance) / conversionFactor_u_s;
+        float selfclosemanualstartFadingEnd = (Settings::manualstartDiameter + Settings::selfFadingDistance) / conversionFactor_u_s + 2.0f;
         float selfclosemanualstartalpha = 1.0f;
         if (basedistance > selfclosemanualstartFadingStart)
         {
@@ -1204,8 +1204,8 @@ void UpdateTimer()
             if (finishcirclealpha < 0.0f) finishcirclealpha = 0.0f;  // Begrenze auf min. 0
         }
 
-        float selfclosefinishFadingStart = (Settings::optionPredefined ? endRadius : Settings::finishDiameter) / conversionFactor_u_s + 5.0f;
-        float selfclosefinishFadingEnd = (Settings::optionPredefined ? endRadius : Settings::finishDiameter) / conversionFactor_u_s + 10.0f;
+        float selfclosefinishFadingStart = ((Settings::optionPredefined ? endRadius : Settings::finishDiameter) + Settings::selfFadingDistance) / conversionFactor_u_s;
+        float selfclosefinishFadingEnd = ((Settings::optionPredefined ? endRadius : Settings::finishDiameter) + Settings::selfFadingDistance) / conversionFactor_u_s + 2.0f;
         float selfclosefinishalpha = 1.0f;
         if (pausedistance > selfclosefinishFadingStart) {
             selfclosefinishalpha = 1.0f - ((pausedistance - selfclosefinishFadingStart) / (selfclosefinishFadingEnd - selfclosefinishFadingStart));
@@ -1228,8 +1228,8 @@ void UpdateTimer()
             if (nextcheckpointcirclealpha < 0.0f) nextcheckpointcirclealpha = 0.0f;  // Begrenze auf min. 0
         }
 
-        float selfclosecheckpointFadingStart = checkpointRadius / conversionFactor_u_s + 5.0f;
-        float selfclosecheckpointFadingEnd = checkpointRadius / conversionFactor_u_s + 10.0f;
+        float selfclosecheckpointFadingStart = (checkpointRadius + Settings::selfFadingDistance) / conversionFactor_u_s;
+        float selfclosecheckpointFadingEnd = (checkpointRadius + Settings::selfFadingDistance) / conversionFactor_u_s + 2.0f;
         float selfclosecheckpointalpha = 1.0f;
         if (checkpointdistance > selfclosecheckpointFadingStart) {
             selfclosecheckpointalpha = 1.0f - ((checkpointdistance - selfclosecheckpointFadingStart) / (selfclosecheckpointFadingEnd - selfclosecheckpointFadingStart));
@@ -4199,14 +4199,22 @@ void AddonOptions()
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to set the start and checkpoint / finish circle fading distances:");
-    if (ImGui::DragFloat("Start circle fading distance (300 - 20000 units)", &Settings::startFadingDistance, 5.0f, 300.0f, 20000.0f, "%.1f units"))
+    if (ImGui::DragFloat("Start circle fading distance (20 - 20000 units)", &Settings::startFadingDistance, 5.0f, 20.0f, 20000.0f, "%.1f units"))
     {
         Settings::Settings[START_FADING_DISTANCE] = Settings::startFadingDistance;
         Settings::Save(SettingsPath);
     }
-    if (ImGui::DragFloat("Checkpoint / Finish circle fading distance (300 - 20000 units)", &Settings::finishFadingDistance, 5.0f, 300.0f, 20000.0f, "%.1f units"))
+    if (ImGui::DragFloat("Checkpoint / Finish circle fading distance (20 - 20000 units)", &Settings::finishFadingDistance, 5.0f, 20.0f, 20000.0f, "%.1f units"))
     {
         Settings::Settings[FINISH_FADING_DISTANCE] = Settings::finishFadingDistance;
+        Settings::Save(SettingsPath);
+    }
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to set the self circle fading distance:");
+    if (ImGui::DragFloat("Self circle fading distance (20 - 600 units)", &Settings::selfFadingDistance, 1.0f, 20.0f, 600.0f, "%.1f units"))
+    {
+        Settings::Settings[SELF_FADING_DISTANCE] = Settings::selfFadingDistance;
         Settings::Save(SettingsPath);
     }
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -4567,6 +4575,7 @@ void AddonOptions()
         Settings::IsTimerEnabled = true;
         Settings::startFadingDistance = 2500.0f;
         Settings::finishFadingDistance = 2500.0f;
+        Settings::selfFadingDistance = 300.0f;
         Settings::optionFlat = true;
         Settings::optionArc = false;
         Settings::optionRing = false;

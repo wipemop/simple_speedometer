@@ -22,6 +22,7 @@ const char* SPEEDOMETER_DIAL_SCALE = "SpeedometerDialScale";
 const char* IS_SPEEDOMETER_TIMER_VISIBLE = "IsSpeedometerTimerVisible";
 const char* START_FADING_DISTANCE = "StartFadingDistance";
 const char* FINISH_FADING_DISTANCE = "FinishFadingDistance";
+const char* SELF_FADING_DISTANCE = "StartFadingDistance";
 const char* CIRCLE_STYLE_FLAT = "CircleStyleFlat";
 const char* CIRCLE_STYLE_ARC = "CircleStyleArc";
 const char* CIRCLE_STYLE_RING = "CircleStyleRing";
@@ -140,6 +141,10 @@ namespace Settings
 		if (!Settings[START_FADING_DISTANCE].is_null())
 		{
 			Settings[START_FADING_DISTANCE].get_to<float>(startFadingDistance);
+		}
+		if (!Settings[SELF_FADING_DISTANCE].is_null())
+		{
+			Settings[SELF_FADING_DISTANCE].get_to<float>(selfFadingDistance);
 		}
 		if (!Settings[FINISH_FADING_DISTANCE].is_null())
 		{
@@ -275,6 +280,7 @@ namespace Settings
 	bool IsTimerEnabled = true;
 	float startFadingDistance = 2500.0f;
 	float finishFadingDistance = 2500.0f;
+	float selfFadingDistance = 300.0f;
 	bool optionFlat = true;
 	bool optionArc = false;
 	bool optionRing = false;

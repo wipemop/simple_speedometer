@@ -25,6 +25,7 @@ extern const char* SPEEDOMETER_DIAL_SCALE;
 extern const char* IS_SPEEDOMETER_TIMER_VISIBLE;
 extern const char* START_FADING_DISTANCE;
 extern const char* FINISH_FADING_DISTANCE;
+extern const char* SELF_FADING_DISTANCE;
 extern const char* CIRCLE_STYLE_FLAT;
 extern const char* CIRCLE_STYLE_ARC;
 extern const char* CIRCLE_STYLE_RING;
@@ -78,6 +79,7 @@ namespace Settings
 	extern bool IsTimerEnabled;
 	extern float startFadingDistance;
 	extern float finishFadingDistance;
+	extern float selfFadingDistance;
 	extern bool optionFlat;
 	extern bool optionArc;
 	extern bool optionRing;
