@@ -221,8 +221,8 @@ extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
     AddonDef.Name = "Simple Speedometer";
     AddonDef.Version.Major = 1;
     AddonDef.Version.Minor = 1;
-    AddonDef.Version.Build = 2;
-    AddonDef.Version.Revision = 2;
+    AddonDef.Version.Build = 3;
+    AddonDef.Version.Revision = 1;
     AddonDef.Author = "Toxxa";
     AddonDef.Description = "A lightly customizable Speedometer and movement-triggered Timer system.";
     AddonDef.Load = AddonLoad;
@@ -3296,200 +3296,323 @@ void AddonRender()
             float targetAlpha = isMouseOver ? 0.2f : 1.0f;
             imageAlpha += (targetAlpha - imageAlpha) * fadeSpeed;
 
-            // Setting up ImGui Window for the Speedometer dial
-            ImGui::SetNextWindowBgAlpha(0.0f);
-            ImGui::SetNextWindowPos(ImVec2(speedometerPos), ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2(dialSize));
-
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-            ImGui::Begin("Speedometer", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
-            if (speedometerTexture)
+            if (Settings::FancyDialEnabled)
             {
-                ImGui::Image(speedometerTexture->Resource, dialSize, ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, imageAlpha));
-            }
-            else
-            {
-                speedometerTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_background", speedometer_background, hSelf);
-            }
-            ImGui::End();
-            ImGui::PopStyleVar(2);
-
-            // Speed calculation according to settings and variables for the max amplitude / exceeding speed animations on needle and numbers
-            int speed = static_cast<int>(roundf((Settings::option2D ? lastSpeed2D : lastSpeed3D) * (Settings::optionUnits ? conversionFactor_u_s : (Settings::optionFeetPercent ? conversionFactor_foot : conversionFactor_beetle)))); // Calculating the concurrent speed
-            float minAngle = -18.0f; // Minimum needle angle
-            float maxAngle = 99.0f; // Maximum needle angle
-            float needleLimitUnits = Settings::amplitudeUnits; // Needle max amp for units
-            float needleLimitFeetPercent = Settings::amplitudeFeetPercent; // Needle max amp for feet
-            float needleLimitBeetlePercent = Settings::amplitudeBeetlePercent; // Needle max amp for beetle
-            float needleLimit = (Settings::optionUnits ? needleLimitUnits : (Settings::optionFeetPercent ? needleLimitFeetPercent : needleLimitBeetlePercent) + 0.01); // Whether the needle max amp for units, feet or beetle is to be used
-
-            // Setting up ImGui Windows for the Speedometer needle and max amp animations
-            if (!needleTexture or !blueneedleTexture)
-            {
-                needleTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_needle", speedometer_needle, hSelf);
-                blueneedleTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_needle_blue", speedometer_needle_blue, hSelf);
-            }
-            if (needleTexture and blueneedleTexture)
-            {
-
-                // Render max amp sparking from needle pivot underneath the needle
-                if (!fireTexture)
-                {
-                    fireTexture = APIDefs->Textures.GetOrCreateFromResource("fire_sparks", fire_sparks, hSelf);
-                }
-                if (fireTexture)
-                {
-                    ImGui::SetNextWindowBgAlpha(0.0f);
-                    ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 0.0f, speedometerPos.y + Settings::DialScale * 0.0f), ImGuiCond_Always);
-                    ImGui::SetNextWindowSize(ImVec2(dialSize));
-
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-                    ImGui::Begin("fire Sparks", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
-                    double fireframeDelay = 0.008333; // Delay in seconds to draw each sprite frame
-                    int firetotalFrames = 32;  // Total sprite frames to be drawn
-
-                    // Setting the rules for when to play the animation
-                    if (speed > needleLimit)
-                    {
-                        if (!fireAnimationTriggered)
-                        {
-                            fireAnimationTriggered = true;
-                            fireAnimationFinished = false;
-                            fireFrame = 0;
-                            fireNextFrameTime = ImGui::GetTime() + fireframeDelay;
-                        }
-                        else if (!fireAnimationFinished && ImGui::GetTime() >= fireNextFrameTime)
-                        {
-                            fireFrame++;
-                            if (fireFrame >= firetotalFrames)
-                            {
-                                fireFrame = 0;
-                                fireAnimationFinished = true;
-                            }
-                            fireNextFrameTime = ImGui::GetTime() + fireframeDelay;
-                        }
-                    }
-                    else
-                    {
-                        fireAnimationTriggered = false;
-                        fireAnimationFinished = false;
-                        fireFrame = 0;
-                    }
-
-                    // Draw sprite animation if triggered
-                    if (fireAnimationTriggered)
-                    {
-                        int firenumCols = 8; // Number of colums of the sprite sheet
-                        int firenumRows = 4; // Number of rows of the sprite sheet
-                        int fireframeCol = fireFrame % firenumCols; // Calculating the active column
-                        int fireframeRow = fireFrame / firenumCols; // Calculating the active row
-                        float fireframeWidth = 1.0f / static_cast<float>(firenumCols); // Calculating the width of each frame
-                        float fireframeHeight = 1.0f / static_cast<float>(firenumRows); // Calculating the height of each frame
-
-                        ImVec2 fireUV0(fireframeCol * fireframeWidth, fireframeRow * fireframeHeight); // Calculating upper left pixel coordinate of the frame
-                        ImVec2 fireUV1((fireframeCol + 1) * fireframeWidth, (fireframeRow + 1) * fireframeHeight); // Calculating lower right pixel coordinate of the frame
-
-                        ImVec2 firePos = ImVec2(speedometerPos.x + Settings::DialScale * 2.490f, speedometerPos.y + Settings::DialScale * 1.070f); // Positioning relative to the Speedometer position
-                        ImVec2 fireSize = ImVec2(dialSize.x * 0.5f, dialSize.y * 0.8f); // Size scaling relative to Speedometer size
-
-                        ImGui::SetCursorScreenPos(firePos);
-                        ImGui::Image(fireTexture->Resource, fireSize, fireUV0, fireUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
-                    }
-                    ImGui::End();
-                    ImGui::PopStyleVar(2);
-                }
-
-                // Render speedometer needle
+                // Setting up ImGui Window for the Speedometer dial
                 ImGui::SetNextWindowBgAlpha(0.0f);
                 ImGui::SetNextWindowPos(ImVec2(speedometerPos), ImGuiCond_Always);
                 ImGui::SetNextWindowSize(ImVec2(dialSize));
 
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-                ImGui::Begin("Needle", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
-
-                ImDrawList* drawList = ImGui::GetWindowDrawList(); // Getting current draw list 
-                ImVec2 needlePivot = ImVec2(speedometerPos.x + dialSize.x * 0.565f, speedometerPos.y + dialSize.y * 0.630f); // Setting the pivot point of the needle on the Speedometer
-
-                float clampedSpeed = speed;
-                if (speed > needleLimit) clampedSpeed = needleLimit; // Clamping the needle to the currently set max speed at its max angle
-                float targetAngle = minAngle + (maxAngle - minAngle) * (clampedSpeed / needleLimit); // Calculating the target angle for the current speed reading
-
-                // Fancy needle twitching animation as if it tries to exceed its turning limits
-                if (speed > needleLimit)
+                ImGui::Begin("Speedometer", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+                if (speedometerTexture)
                 {
-                    float amplitude = 4.0f;
-                    float frequency = 15.0f;
-                    targetAngle = maxAngle + sin(ImGui::GetTime() * frequency * 2.0f * 3.14159265f) * amplitude;
-                }
-
-                // Smoothing the needle movements
-                static float currentAngle = minAngle;
-                const float smoothingFactor = 0.5f;
-                currentAngle += (targetAngle - currentAngle) * smoothingFactor;
-
-                float rad = currentAngle * (3.14159265f / 180.0f); // Calculating the target angle for the needle movement
-                ImVec2 needleCenter = ImVec2(dialSize.x * 0.52680f, dialSize.y * 0.05817f); // Defining the position of the needle pivot point on the needle texture
-
-                // Calculating the four corners of the needle texture, this affects its shape
-                ImVec2 p1 = ImVec2(-needleCenter.x, -needleCenter.y);
-                ImVec2 p2 = ImVec2(dialSize.x * 0.57636f - needleCenter.x, -needleCenter.y);
-                ImVec2 p3 = ImVec2(dialSize.x * 0.57636f - needleCenter.x, dialSize.y * 0.11633f - needleCenter.y);
-                ImVec2 p4 = ImVec2(-needleCenter.x, dialSize.y * 0.11633f - needleCenter.y);
-
-                // Rotating the needle
-                auto rotate = [&](ImVec2 p) -> ImVec2 {return ImVec2(needlePivot.x + cos(rad) * p.x - sin(rad) * p.y, needlePivot.y + sin(rad) * p.x + cos(rad) * p.y);};
-
-                // Calculate the positions the positions of the four corners of the needle texture
-                ImVec2 r1 = rotate(p1);
-                ImVec2 r2 = rotate(p2);
-                ImVec2 r3 = rotate(p3);
-                ImVec2 r4 = rotate(p4);
-
-                ImU32 col = IM_COL32(255, 255, 255, (int)(imageAlpha * 255)); // Calculating the color (white with imageAlpha)
-
-                if (speed > needleLimit)
-                {
-                    drawList->PushTextureID(blueneedleTexture->Resource); // Pushing the texture to the drawlist
+                    ImGui::Image(speedometerTexture->Resource, dialSize, ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, imageAlpha));
                 }
                 else
                 {
-                    drawList->PushTextureID(needleTexture->Resource); // Pushing the texture to the drawlist
+                    speedometerTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_background", speedometer_background, hSelf);
                 }
-
-                // Extending the vertex and index buffer with four vertices and six indices
-                int vtx_current_size = drawList->VtxBuffer.Size;
-                int idx_current_size = drawList->IdxBuffer.Size;
-                drawList->PrimReserve(6, 4);
-
-                // Writing the four vertex datapoints (position, UV coordinates, color)
-                ImDrawVert* vtx = drawList->VtxBuffer.Data + vtx_current_size;
-                vtx[0].pos = r1;  vtx[0].uv = ImVec2(0.0f, 0.0f);  vtx[0].col = col;
-                vtx[1].pos = r2;  vtx[1].uv = ImVec2(1.0f, 0.0f);  vtx[1].col = col;
-                vtx[2].pos = r3;  vtx[2].uv = ImVec2(1.0f, 1.0f);  vtx[2].col = col;
-                vtx[3].pos = r4;  vtx[3].uv = ImVec2(0.0f, 1.0f);  vtx[3].col = col;
-
-                // Writing the six indices for two trianggles (Quad = [0,1,2] und [0,2,3])
-                ImDrawIdx* idx = drawList->IdxBuffer.Data + idx_current_size;
-                idx[0] = (ImDrawIdx)(vtx_current_size + 0);
-                idx[1] = (ImDrawIdx)(vtx_current_size + 1);
-                idx[2] = (ImDrawIdx)(vtx_current_size + 2);
-                idx[3] = (ImDrawIdx)(vtx_current_size + 0);
-                idx[4] = (ImDrawIdx)(vtx_current_size + 2);
-                idx[5] = (ImDrawIdx)(vtx_current_size + 3);
-
-                drawList->PopTextureID(); // Releasing the texture from the drawlist
                 ImGui::End();
                 ImGui::PopStyleVar(2);
 
-                // Render max amp sparking on top of the needle pivot
-                if (!pivotTexture)
+                // Speed calculation according to settings and variables for the max amplitude / exceeding speed animations on needle and numbers
+                int speed = static_cast<int>(roundf((Settings::option2D ? lastSpeed2D : lastSpeed3D) * (Settings::optionUnits ? conversionFactor_u_s : (Settings::optionFeetPercent ? conversionFactor_foot : conversionFactor_beetle)))); // Calculating the concurrent speed
+                float minAngle = -18.0f; // Minimum needle angle
+                float maxAngle = 99.0f; // Maximum needle angle
+                float needleLimitUnits = Settings::amplitudeUnits; // Needle max amp for units
+                float needleLimitFeetPercent = Settings::amplitudeFeetPercent; // Needle max amp for feet
+                float needleLimitBeetlePercent = Settings::amplitudeBeetlePercent; // Needle max amp for beetle
+                float needleLimit = (Settings::optionUnits ? needleLimitUnits : (Settings::optionFeetPercent ? needleLimitFeetPercent : needleLimitBeetlePercent) + 0.01); // Whether the needle max amp for units, feet or beetle is to be used
+
+                // Setting up ImGui Windows for the Speedometer needle and max amp animations
+                if (!needleTexture or !blueneedleTexture)
                 {
-                    pivotTexture = APIDefs->Textures.GetOrCreateFromResource("pivot_sparks", pivot_sparks, hSelf);
+                    needleTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_needle", speedometer_needle, hSelf);
+                    blueneedleTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_needle_blue", speedometer_needle_blue, hSelf);
                 }
-                if (pivotTexture)
+                if (needleTexture and blueneedleTexture)
+                {
+
+                    // Render max amp sparking from needle pivot underneath the needle
+                    if (!fireTexture)
+                    {
+                        fireTexture = APIDefs->Textures.GetOrCreateFromResource("fire_sparks", fire_sparks, hSelf);
+                    }
+                    if (fireTexture)
+                    {
+                        ImGui::SetNextWindowBgAlpha(0.0f);
+                        ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 0.0f, speedometerPos.y + Settings::DialScale * 0.0f), ImGuiCond_Always);
+                        ImGui::SetNextWindowSize(ImVec2(dialSize));
+
+                        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+                        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+                        ImGui::Begin("fire Sparks", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+                        double fireframeDelay = 0.008333; // Delay in seconds to draw each sprite frame
+                        int firetotalFrames = 32;  // Total sprite frames to be drawn
+
+                        // Setting the rules for when to play the animation
+                        if (speed > needleLimit)
+                        {
+                            if (!fireAnimationTriggered)
+                            {
+                                fireAnimationTriggered = true;
+                                fireAnimationFinished = false;
+                                fireFrame = 0;
+                                fireNextFrameTime = ImGui::GetTime() + fireframeDelay;
+                            }
+                            else if (!fireAnimationFinished && ImGui::GetTime() >= fireNextFrameTime)
+                            {
+                                fireFrame++;
+                                if (fireFrame >= firetotalFrames)
+                                {
+                                    fireFrame = 0;
+                                    fireAnimationFinished = true;
+                                }
+                                fireNextFrameTime = ImGui::GetTime() + fireframeDelay;
+                            }
+                        }
+                        else
+                        {
+                            fireAnimationTriggered = false;
+                            fireAnimationFinished = false;
+                            fireFrame = 0;
+                        }
+
+                        // Draw sprite animation if triggered
+                        if (fireAnimationTriggered)
+                        {
+                            int firenumCols = 8; // Number of colums of the sprite sheet
+                            int firenumRows = 4; // Number of rows of the sprite sheet
+                            int fireframeCol = fireFrame % firenumCols; // Calculating the active column
+                            int fireframeRow = fireFrame / firenumCols; // Calculating the active row
+                            float fireframeWidth = 1.0f / static_cast<float>(firenumCols); // Calculating the width of each frame
+                            float fireframeHeight = 1.0f / static_cast<float>(firenumRows); // Calculating the height of each frame
+
+                            ImVec2 fireUV0(fireframeCol * fireframeWidth, fireframeRow * fireframeHeight); // Calculating upper left pixel coordinate of the frame
+                            ImVec2 fireUV1((fireframeCol + 1) * fireframeWidth, (fireframeRow + 1) * fireframeHeight); // Calculating lower right pixel coordinate of the frame
+
+                            ImVec2 firePos = ImVec2(speedometerPos.x + Settings::DialScale * 2.490f, speedometerPos.y + Settings::DialScale * 1.070f); // Positioning relative to the Speedometer position
+                            ImVec2 fireSize = ImVec2(dialSize.x * 0.5f, dialSize.y * 0.8f); // Size scaling relative to Speedometer size
+
+                            ImGui::SetCursorScreenPos(firePos);
+                            ImGui::Image(fireTexture->Resource, fireSize, fireUV0, fireUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
+                        }
+                        ImGui::End();
+                        ImGui::PopStyleVar(2);
+                    }
+
+                    // Render speedometer needle
+                    ImGui::SetNextWindowBgAlpha(0.0f);
+                    ImGui::SetNextWindowPos(ImVec2(speedometerPos), ImGuiCond_Always);
+                    ImGui::SetNextWindowSize(ImVec2(dialSize));
+
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+                    ImGui::Begin("Needle", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+
+                    ImDrawList* drawList = ImGui::GetWindowDrawList(); // Getting current draw list 
+                    ImVec2 needlePivot = ImVec2(speedometerPos.x + dialSize.x * 0.565f, speedometerPos.y + dialSize.y * 0.630f); // Setting the pivot point of the needle on the Speedometer
+
+                    float clampedSpeed = speed;
+                    if (speed > needleLimit) clampedSpeed = needleLimit; // Clamping the needle to the currently set max speed at its max angle
+                    float targetAngle = minAngle + (maxAngle - minAngle) * (clampedSpeed / needleLimit); // Calculating the target angle for the current speed reading
+
+                    // Fancy needle twitching animation as if it tries to exceed its turning limits
+                    if (speed > needleLimit)
+                    {
+                        float amplitude = 4.0f;
+                        float frequency = 15.0f;
+                        targetAngle = maxAngle + sin(ImGui::GetTime() * frequency * 2.0f * 3.14159265f) * amplitude;
+                    }
+
+                    // Smoothing the needle movements
+                    static float currentAngle = minAngle;
+                    const float smoothingFactor = 0.5f;
+                    currentAngle += (targetAngle - currentAngle) * smoothingFactor;
+
+                    float rad = currentAngle * (3.14159265f / 180.0f); // Calculating the target angle for the needle movement
+                    ImVec2 needleCenter = ImVec2(dialSize.x * 0.52680f, dialSize.y * 0.05817f); // Defining the position of the needle pivot point on the needle texture
+
+                    // Calculating the four corners of the needle texture, this affects its shape
+                    ImVec2 p1 = ImVec2(-needleCenter.x, -needleCenter.y);
+                    ImVec2 p2 = ImVec2(dialSize.x * 0.57636f - needleCenter.x, -needleCenter.y);
+                    ImVec2 p3 = ImVec2(dialSize.x * 0.57636f - needleCenter.x, dialSize.y * 0.11633f - needleCenter.y);
+                    ImVec2 p4 = ImVec2(-needleCenter.x, dialSize.y * 0.11633f - needleCenter.y);
+
+                    // Rotating the needle
+                    auto rotate = [&](ImVec2 p) -> ImVec2 {return ImVec2(needlePivot.x + cos(rad) * p.x - sin(rad) * p.y, needlePivot.y + sin(rad) * p.x + cos(rad) * p.y);};
+
+                    // Calculate the positions the positions of the four corners of the needle texture
+                    ImVec2 r1 = rotate(p1);
+                    ImVec2 r2 = rotate(p2);
+                    ImVec2 r3 = rotate(p3);
+                    ImVec2 r4 = rotate(p4);
+
+                    ImU32 col = IM_COL32(255, 255, 255, (int)(imageAlpha * 255)); // Calculating the color (white with imageAlpha)
+
+                    if (speed > needleLimit)
+                    {
+                        drawList->PushTextureID(blueneedleTexture->Resource); // Pushing the texture to the drawlist
+                    }
+                    else
+                    {
+                        drawList->PushTextureID(needleTexture->Resource); // Pushing the texture to the drawlist
+                    }
+
+                    // Extending the vertex and index buffer with four vertices and six indices
+                    int vtx_current_size = drawList->VtxBuffer.Size;
+                    int idx_current_size = drawList->IdxBuffer.Size;
+                    drawList->PrimReserve(6, 4);
+
+                    // Writing the four vertex datapoints (position, UV coordinates, color)
+                    ImDrawVert* vtx = drawList->VtxBuffer.Data + vtx_current_size;
+                    vtx[0].pos = r1;  vtx[0].uv = ImVec2(0.0f, 0.0f);  vtx[0].col = col;
+                    vtx[1].pos = r2;  vtx[1].uv = ImVec2(1.0f, 0.0f);  vtx[1].col = col;
+                    vtx[2].pos = r3;  vtx[2].uv = ImVec2(1.0f, 1.0f);  vtx[2].col = col;
+                    vtx[3].pos = r4;  vtx[3].uv = ImVec2(0.0f, 1.0f);  vtx[3].col = col;
+
+                    // Writing the six indices for two trianggles (Quad = [0,1,2] und [0,2,3])
+                    ImDrawIdx* idx = drawList->IdxBuffer.Data + idx_current_size;
+                    idx[0] = (ImDrawIdx)(vtx_current_size + 0);
+                    idx[1] = (ImDrawIdx)(vtx_current_size + 1);
+                    idx[2] = (ImDrawIdx)(vtx_current_size + 2);
+                    idx[3] = (ImDrawIdx)(vtx_current_size + 0);
+                    idx[4] = (ImDrawIdx)(vtx_current_size + 2);
+                    idx[5] = (ImDrawIdx)(vtx_current_size + 3);
+
+                    drawList->PopTextureID(); // Releasing the texture from the drawlist
+                    ImGui::End();
+                    ImGui::PopStyleVar(2);
+
+                    // Render max amp sparking on top of the needle pivot
+                    if (!pivotTexture)
+                    {
+                        pivotTexture = APIDefs->Textures.GetOrCreateFromResource("pivot_sparks", pivot_sparks, hSelf);
+                    }
+                    if (pivotTexture)
+                    {
+                        ImGui::SetNextWindowBgAlpha(0.0f);
+                        ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 0.0f, speedometerPos.y + Settings::DialScale * 0.0f), ImGuiCond_Always);
+                        ImGui::SetNextWindowSize(ImVec2(dialSize));
+
+                        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+                        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+                        ImGui::Begin("Pivot Sparks", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+
+                        double pivotframeDelay = 0.05; // Delay in seconds to draw each sprite frame
+                        int pivottotalFrames = 8;  // Total sprite frames to be drawn
+
+                        // Setting the rules for when to play the animation
+                        if (speed > needleLimit)
+                        {
+                            if (!pivotAnimationTriggered)
+                            {
+                                pivotAnimationTriggered = true;
+                                pivotFrame = 0;
+                                pivotNextFrameTime = ImGui::GetTime() + pivotframeDelay;
+                            }
+                            else if (ImGui::GetTime() >= pivotNextFrameTime)
+                            {
+                                pivotFrame = (pivotFrame + 1) % pivottotalFrames;
+                                pivotNextFrameTime = ImGui::GetTime() + pivotframeDelay;
+                            }
+                        }
+                        else
+                        {
+                            pivotAnimationTriggered = false;
+                            pivotFrame = 0;
+                        }
+
+                        // Draw sprite animation if triggered
+                        if (pivotAnimationTriggered)
+                        {
+                            int pivotnumCols = 4; // Number of colums of the sprite sheet
+                            int pivotnumRows = 2; // Number of rows of the sprite sheet
+                            int pivotframeRow = pivotFrame / pivotnumCols; // Calculating the active column
+                            int pivotframeCol = pivotFrame % pivotnumCols; // Calculating the active row
+                            float pivotframeWidth = 1.0f / static_cast<float>(pivotnumCols); // Calculating the width of each frame
+                            float pivotframeHeight = 1.0f / static_cast<float>(pivotnumRows); // Calculating the height of each frame
+
+                            ImVec2 pivotUV0(pivotframeCol * pivotframeWidth, pivotframeRow * pivotframeHeight); // Calculating upper left pixel coordinate of the frame
+                            ImVec2 pivotUV1((pivotframeCol + 1) * pivotframeWidth, (pivotframeRow + 1) * pivotframeHeight); // Calculating lower right pixel coordinate of the frame
+
+                            ImVec2 pivotPos = ImVec2(speedometerPos.x + Settings::DialScale * 2.82f, speedometerPos.y + Settings::DialScale * 2.83f); // Positioning relative to the Speedometer position
+                            ImVec2 pivotSize = ImVec2(dialSize.x * 0.13f, dialSize.y * 0.13f); // Size scaling relative to Speedometer size
+
+                            ImGui::SetCursorScreenPos(pivotPos);
+                            ImGui::Image(pivotTexture->Resource, pivotSize, pivotUV0, pivotUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
+                        }
+                        ImGui::End();
+                        ImGui::PopStyleVar(2);
+                    }
+                }
+
+                //Setting up the numerical display on the Speedometer dial
+                if (!numberTexture)
+                {
+                    numberTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_numbers", speedometer_numbers, hSelf);
+                }
+                if (numberTexture)
+                {
+                    ImGui::SetNextWindowBgAlpha(0.0f);
+                    ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 3.58f, speedometerPos.y + Settings::DialScale * 1.55f), ImGuiCond_Always);
+                    ImGui::SetNextWindowSize(ImVec2(dialSize));
+
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+                    ImGui::Begin("Numbers", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+
+                    // Turning the concurrent speed into a four-piece string with leading zeroes
+                    char speedStr[5];
+                    snprintf(speedStr, sizeof(speedStr), "%04d", speed);
+                    bool leadingZero = true;
+
+                    // Looping through the four digits
+                    for (int i = 0; i < 4; i++)
+                    {
+                        int digit = speedStr[i] - '0'; // Getting the digit
+                        int digitRow;
+
+                        // Picking which row on the sprite sheet to pick the number from
+                        if (leadingZero && digit == 0)
+                        {
+                            digitRow = 2;
+                        }
+                        else
+                        {
+                            leadingZero = false;
+                            digitRow = (speed > needleLimit) ? 1 : 0;
+                        }
+
+                        float digitWidth = 1.0f / 12.0f; // Width of each number determined as a divider of the total width of the sprite sheet
+                        float digitHeight = 1.0f / 5.0f; // Heigth of each number determined as a divider of the total width of the sprite sheet
+
+
+                        ImVec2 digitUV0(digit * digitWidth, digitRow * digitHeight); // Calculating upper left pixel coordinate of the frame
+                        ImVec2 digitUV1((digit + 1) * digitWidth, (digitRow + 1) * digitHeight); // Calculating lower right pixel coordinate of the frame
+
+                        ImGui::Image(numberTexture->Resource, ImVec2(Settings::DialScale * 0.45f, Settings::DialScale * 0.69f), digitUV0, digitUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
+
+                        // Calculating offsets to place the last three numbers relative to the first
+                        if (i == 0)
+                            ImGui::SameLine(Settings::DialScale * 0.396f, 0.0f);
+                        if (i == 1)
+                            ImGui::SameLine(Settings::DialScale * 0.786f, 0.0f);
+                        if (i == 2)
+                            ImGui::SameLine(Settings::DialScale * 1.176f, 0.0f);
+                    }
+                    ImGui::End();
+                    ImGui::PopStyleVar(2);
+                }
+
+                // Setting up the dimension and unit displays on the Speedometer dial
+                if (!indicatorTexture)
+                {
+                    indicatorTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_indicators", speedometer_indicators, hSelf);
+                }
+                if (indicatorTexture)
                 {
                     ImGui::SetNextWindowBgAlpha(0.0f);
                     ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 0.0f, speedometerPos.y + Settings::DialScale * 0.0f), ImGuiCond_Always);
@@ -3497,171 +3620,107 @@ void AddonRender()
 
                     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
                     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-                    ImGui::Begin("Pivot Sparks", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+                    ImGui::Begin("Dimensions", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
-                    double pivotframeDelay = 0.05; // Delay in seconds to draw each sprite frame
-                    int pivottotalFrames = 8;  // Total sprite frames to be drawn
+                    int dimensionFrame = Settings::option2D ? 0 : 1; // Picking a specific frame from the sprite sheet based on settings - count starts from 0 for frame 1
+                    int dimensionnumCols = 4; // Number of colums of the sprite sheet
+                    int dimensionnumRows = 2; // Number of rows of the sprite sheet
+                    int dimensionframeCol = dimensionFrame % dimensionnumCols; // Calculating the active column
+                    int dimensionframeRow = dimensionFrame / dimensionnumCols; // Calculating the active row
+                    float dimensionframeWidth = 1.0f / static_cast<float>(dimensionnumCols); // Calculating the width of each frame
+                    float dimensionframeHeight = 1.0f / static_cast<float>(dimensionnumRows); // Calculating the height of each frame
 
-                    // Setting the rules for when to play the animation
-                    if (speed > needleLimit)
-                    {
-                        if (!pivotAnimationTriggered)
-                        {
-                            pivotAnimationTriggered = true;
-                            pivotFrame = 0;
-                            pivotNextFrameTime = ImGui::GetTime() + pivotframeDelay;
-                        }
-                        else if (ImGui::GetTime() >= pivotNextFrameTime)
-                        {
-                            pivotFrame = (pivotFrame + 1) % pivottotalFrames;
-                            pivotNextFrameTime = ImGui::GetTime() + pivotframeDelay;
-                        }
-                    }
-                    else
-                    {
-                        pivotAnimationTriggered = false;
-                        pivotFrame = 0;
-                    }
+                    ImVec2 dimensionUV0(dimensionframeCol * dimensionframeWidth, dimensionframeRow * dimensionframeHeight); // Calculating upper left pixel coordinate of the frame
+                    ImVec2 dimensionUV1((dimensionframeCol + 1) * dimensionframeWidth, (dimensionframeRow + 1) * dimensionframeHeight); // Calculating lower right pixel coordinate of the frame
 
-                    // Draw sprite animation if triggered
-                    if (pivotAnimationTriggered)
-                    {
-                        int pivotnumCols = 4; // Number of colums of the sprite sheet
-                        int pivotnumRows = 2; // Number of rows of the sprite sheet
-                        int pivotframeRow = pivotFrame / pivotnumCols; // Calculating the active column
-                        int pivotframeCol = pivotFrame % pivotnumCols; // Calculating the active row
-                        float pivotframeWidth = 1.0f / static_cast<float>(pivotnumCols); // Calculating the width of each frame
-                        float pivotframeHeight = 1.0f / static_cast<float>(pivotnumRows); // Calculating the height of each frame
+                    ImVec2 dimensionPos = ImVec2(speedometerPos.x + Settings::DialScale * 3.63f, speedometerPos.y + Settings::DialScale * 2.81f); // Positioning relative to the Speedometer position
+                    ImVec2 dimensionSize = ImVec2(dialSize.x * 0.28f, dialSize.y * 0.125f); // Size scaling relative to Speedometer size
 
-                        ImVec2 pivotUV0(pivotframeCol * pivotframeWidth, pivotframeRow * pivotframeHeight); // Calculating upper left pixel coordinate of the frame
-                        ImVec2 pivotUV1((pivotframeCol + 1) * pivotframeWidth, (pivotframeRow + 1) * pivotframeHeight); // Calculating lower right pixel coordinate of the frame
+                    ImGui::SetCursorScreenPos(dimensionPos);
+                    ImGui::Image(indicatorTexture->Resource, dimensionSize, dimensionUV0, dimensionUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
 
-                        ImVec2 pivotPos = ImVec2(speedometerPos.x + Settings::DialScale * 2.82f, speedometerPos.y + Settings::DialScale * 2.83f); // Positioning relative to the Speedometer position
-                        ImVec2 pivotSize = ImVec2(dialSize.x * 0.13f, dialSize.y * 0.13f); // Size scaling relative to Speedometer size
+                    int unitFrame = Settings::optionFeetPercent ? 3 : (Settings::optionBeetlePercent ? 4 : 5); // Picking a specific frame from the sprite sheet based on settings - count starts from 0 for frame 1
+                    int unitnumCols = 3; // Number of colums of the sprite sheet
+                    int unitnumRows = 2; // Number of rows of the sprite sheet
+                    int unitframeRow = unitFrame / unitnumCols; // Calculating the active column
+                    int unitframeCol = unitFrame % unitnumCols; // Calculating the active row
+                    float unitframeWidth = 1.0f / static_cast<float>(unitnumCols); // Calculating upper left pixel coordinate of the frame
+                    float unitframeHeight = 1.0f / static_cast<float>(unitnumRows); // Calculating the height of each frame
 
-                        ImGui::SetCursorScreenPos(pivotPos);
-                        ImGui::Image(pivotTexture->Resource, pivotSize, pivotUV0, pivotUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
-                    }
+                    ImVec2 unitUV0(unitframeCol * unitframeWidth, unitframeRow * unitframeHeight); // Calculating upper left pixel coordinate of the frame
+                    ImVec2 unitUV1((unitframeCol + 1) * unitframeWidth, (unitframeRow + 1) * unitframeHeight); // Calculating the height of each frame
+
+                    ImVec2 unitPos = ImVec2(speedometerPos.x + Settings::DialScale * 3.01f, speedometerPos.y + Settings::DialScale * 3.955f); // Positioning relative to the Speedometer position
+                    ImVec2 unitSize = ImVec2(dialSize.x * 0.29f, dialSize.y * 0.13f); // Size scaling relative to Speedometer size
+
+                    ImGui::SetCursorScreenPos(unitPos);
+                    ImGui::Image(indicatorTexture->Resource, unitSize, unitUV0, unitUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
+
                     ImGui::End();
                     ImGui::PopStyleVar(2);
                 }
             }
 
-            //Setting up the numerical display on the Speedometer dial
-            if (!numberTexture)
+            if (Settings::MutedDialEnabled)
             {
-                numberTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_numbers", speedometer_numbers, hSelf);
-            }
-            if (numberTexture)
-            {
-                ImGui::SetNextWindowBgAlpha(0.0f);
-                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 3.58f, speedometerPos.y + Settings::DialScale * 1.55f), ImGuiCond_Always);
-                ImGui::SetNextWindowSize(ImVec2(dialSize));
+                ImGui::SetNextWindowSize(ImVec2(75, 75));
+                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x, speedometerPos.y + 10), ImGuiCond_Always);
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-                ImGui::Begin("Numbers", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f);
+                ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-                // Turning the concurrent speed into a four-piece string with leading zeroes
-                char speedStr[5];
-                snprintf(speedStr, sizeof(speedStr), "%04d", speed);
-                bool leadingZero = true;
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 2.0f));
+                ImGui::Begin("##Muted Speedometer", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
-                // Looping through the four digits
-                for (int i = 0; i < 4; i++)
+                ImGui::PushFont((ImFont*)fontptr);
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
+
+                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "V:");
+                ImGui::SameLine(0.0f, 0.0f);
+
+                int mutedspeed = static_cast<int>(roundf((Settings::option2D ? lastSpeed2D : lastSpeed3D) * (Settings::optionUnits ? conversionFactor_u_s : (Settings::optionFeetPercent ? conversionFactor_foot : conversionFactor_beetle))));
+                char buffer[16];
+                snprintf(buffer, sizeof(buffer), "%d", mutedspeed);
+
+                float textWidth = ImGui::CalcTextSize(buffer).x;
+                float windowWidth = ImGui::GetContentRegionAvail().x;
+
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + windowWidth - textWidth);
+                ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "%s", buffer);
+
+                if (Settings::optionUnits)
                 {
-                    int digit = speedStr[i] - '0'; // Getting the digit
-                    int digitRow;
-
-                    // Picking which row on the sprite sheet to pick the number from
-                    if (leadingZero && digit == 0)
-                    {
-                        digitRow = 2;
-                    }
-                    else
-                    {
-                        leadingZero = false;
-                        digitRow = (speed > needleLimit) ? 1 : 0;
-                    }
-
-                    float digitWidth = 1.0f / 12.0f; // Width of each number determined as a divider of the total width of the sprite sheet
-                    float digitHeight = 1.0f / 5.0f; // Heigth of each number determined as a divider of the total width of the sprite sheet
-
-
-                    ImVec2 digitUV0(digit * digitWidth, digitRow * digitHeight); // Calculating upper left pixel coordinate of the frame
-                    ImVec2 digitUV1((digit + 1) * digitWidth, (digitRow + 1) * digitHeight); // Calculating lower right pixel coordinate of the frame
-
-                    ImGui::Image(numberTexture->Resource, ImVec2(Settings::DialScale * 0.45f, Settings::DialScale * 0.69f), digitUV0, digitUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
-
-                    // Calculating offsets to place the last three numbers relative to the first
-                    if (i == 0)
-                        ImGui::SameLine(Settings::DialScale * 0.396f, 0.0f);
-                    if (i == 1)
-                        ImGui::SameLine(Settings::DialScale * 0.786f, 0.0f);
-                    if (i == 2)
-                        ImGui::SameLine(Settings::DialScale * 1.176f, 0.0f);
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "u/sec");
                 }
-                ImGui::End();
-                ImGui::PopStyleVar(2);
-            }
+                if (Settings::optionFeetPercent)
+                {
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Feet%%");
+                }
+                if (Settings::optionBeetlePercent)
+                {
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Btl%%");
+                }
 
-            // Setting up the dimension and unit displays on the Speedometer dial
-            if (!indicatorTexture)
-            {
-                indicatorTexture = APIDefs->Textures.GetOrCreateFromResource("speedometer_indicators", speedometer_indicators, hSelf);
-            }
-            if (indicatorTexture)
-            {
-                ImGui::SetNextWindowBgAlpha(0.0f);
-                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 0.0f, speedometerPos.y + Settings::DialScale * 0.0f), ImGuiCond_Always);
-                ImGui::SetNextWindowSize(ImVec2(dialSize));
+                if (Settings::option2D)
+                {
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "2D");
+                }
+                if (Settings::option3D)
+                {
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "3D");
+                }
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-                ImGui::Begin("Dimensions", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
-
-                int dimensionFrame = Settings::option2D ? 0 : 1; // Picking a specific frame from the sprite sheet based on settings - count starts from 0 for frame 1
-                int dimensionnumCols = 4; // Number of colums of the sprite sheet
-                int dimensionnumRows = 2; // Number of rows of the sprite sheet
-                int dimensionframeCol = dimensionFrame % dimensionnumCols; // Calculating the active column
-                int dimensionframeRow = dimensionFrame / dimensionnumCols; // Calculating the active row
-                float dimensionframeWidth = 1.0f / static_cast<float>(dimensionnumCols); // Calculating the width of each frame
-                float dimensionframeHeight = 1.0f / static_cast<float>(dimensionnumRows); // Calculating the height of each frame
-
-                ImVec2 dimensionUV0(dimensionframeCol * dimensionframeWidth, dimensionframeRow * dimensionframeHeight); // Calculating upper left pixel coordinate of the frame
-                ImVec2 dimensionUV1((dimensionframeCol + 1) * dimensionframeWidth, (dimensionframeRow + 1) * dimensionframeHeight); // Calculating lower right pixel coordinate of the frame
-
-                ImVec2 dimensionPos = ImVec2(speedometerPos.x + Settings::DialScale * 3.63f, speedometerPos.y + Settings::DialScale * 2.81f); // Positioning relative to the Speedometer position
-                ImVec2 dimensionSize = ImVec2(dialSize.x * 0.28f, dialSize.y * 0.125f); // Size scaling relative to Speedometer size
-
-                ImGui::SetCursorScreenPos(dimensionPos);
-                ImGui::Image(indicatorTexture->Resource, dimensionSize, dimensionUV0, dimensionUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
-
-                int unitFrame = Settings::optionFeetPercent ? 3 : (Settings::optionBeetlePercent ? 4 : 5); // Picking a specific frame from the sprite sheet based on settings - count starts from 0 for frame 1
-                int unitnumCols = 3; // Number of colums of the sprite sheet
-                int unitnumRows = 2; // Number of rows of the sprite sheet
-                int unitframeRow = unitFrame / unitnumCols; // Calculating the active column
-                int unitframeCol = unitFrame % unitnumCols; // Calculating the active row
-                float unitframeWidth = 1.0f / static_cast<float>(unitnumCols); // Calculating upper left pixel coordinate of the frame
-                float unitframeHeight = 1.0f / static_cast<float>(unitnumRows); // Calculating the height of each frame
-
-                ImVec2 unitUV0(unitframeCol * unitframeWidth, unitframeRow * unitframeHeight); // Calculating upper left pixel coordinate of the frame
-                ImVec2 unitUV1((unitframeCol + 1) * unitframeWidth, (unitframeRow + 1) * unitframeHeight); // Calculating the height of each frame
-
-                ImVec2 unitPos = ImVec2(speedometerPos.x + Settings::DialScale * 3.01f, speedometerPos.y + Settings::DialScale * 3.955f); // Positioning relative to the Speedometer position
-                ImVec2 unitSize = ImVec2(dialSize.x * 0.29f, dialSize.y * 0.13f); // Size scaling relative to Speedometer size
-
-                ImGui::SetCursorScreenPos(unitPos);
-                ImGui::Image(indicatorTexture->Resource, unitSize, unitUV0, unitUV1, ImVec4(1, 1, 1, imageAlpha)); // Drawing the frame from the sprite sheet
+                ImGui::PopFont();
 
                 ImGui::End();
+                ImGui::PopStyleColor(2);
                 ImGui::PopStyleVar(2);
             }
-
             // Setting up the Speedometer-attached data chart
             if (Settings::IsTableEnabled)
             {
-                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 5.42f - 260.0f, speedometerPos.y - 250.0f), ImGuiCond_Always);
+                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + (Settings::MutedDialEnabled ? 48 : Settings::DialScale) * 5.42f - 260.0f, speedometerPos.y - 250.0f), ImGuiCond_Always);
                 ImGui::SetNextWindowSize(ImVec2(260.0f, 248.0f));
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f); // Setzt die Randbreite auf 2 Pixel
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
@@ -4025,7 +4084,40 @@ void AddonOptions()
     if (ImGui::IsItemHovered())
     {
         ImGui::BeginTooltip();
-        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "This chart only exists to provide a quick glance at all possible velocity values and your distance to the start circle border.");
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "This chart only exists to provide a quick glance at various data points. Not intended for permanent use.");
+        ImGui::EndTooltip();
+    }
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Choose Speedometer style");
+    if (ImGui::Checkbox("Fancy", &Settings::FancyDialEnabled))
+    {
+        if (Settings::FancyDialEnabled) Settings::MutedDialEnabled = false;
+        if (!Settings::FancyDialEnabled) Settings::MutedDialEnabled = true;
+        Settings::Settings[FANCY_SPEEDOMETER_DIAL_VISIBLE] = Settings::FancyDialEnabled;
+        Settings::Settings[MUTED_SPEEDOMETER_DIAL_VISIBLE] = Settings::MutedDialEnabled;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Fancy, vibrant and fun, graphical display");
+        ImGui::EndTooltip();
+    }
+
+    ImGui::SameLine(200.0f, 0.0f);
+    if (ImGui::Checkbox("Muted", &Settings::MutedDialEnabled))
+    {
+        if (Settings::MutedDialEnabled) Settings::FancyDialEnabled = false;
+        if (!Settings::MutedDialEnabled) Settings::FancyDialEnabled = true;
+        Settings::Settings[FANCY_SPEEDOMETER_DIAL_VISIBLE] = Settings::FancyDialEnabled;
+        Settings::Settings[MUTED_SPEEDOMETER_DIAL_VISIBLE] = Settings::MutedDialEnabled;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Visually muted, minimalistic display");
         ImGui::EndTooltip();
     }
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -4047,6 +4139,12 @@ void AddonOptions()
     {
         Settings::Settings[SPEEDOMETER_DIAL_SCALE] = Settings::DialScale;
         Settings::Save(SettingsPath);
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Does not affect the muted display!");
+        ImGui::EndTooltip();
     }
 
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -4191,7 +4289,7 @@ void AddonOptions()
         Settings::Save(SettingsPath);
     }
 
-    if (ImGui::SliderFloat("Scale between 20% and 150%", &Settings::TimerScale, 20.0f, 150.0f, "%.0f %%"))
+    if (ImGui::SliderFloat("Scale between 20% and 150%", &Settings::TimerScale, 10.0f, 150.0f, "%.0f %%"))
     {
         Settings::Settings[SPEEDOMETER_TIMER_SCALE] = Settings::TimerScale;
         Settings::Save(SettingsPath);
@@ -4550,7 +4648,7 @@ void AddonOptions()
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Need a do-over, then hit this button:");
     if (ImGui::Button("Reset Defaults"))
     {
-        basePos = currentPos;
+        basePos = g_currentPos;
 
         Settings::IsReadMeEnabled = false;
         Settings::ReadMePositionH = 450.0f;
@@ -4558,6 +4656,8 @@ void AddonOptions()
 
         Settings::IsDialEnabled = true;
         Settings::IsTableEnabled = false;
+        Settings::FancyDialEnabled = true;
+        Settings::MutedDialEnabled = false;
         Settings::option2D = true;
         Settings::option3D = false;
         Settings::optionUnits = true;
@@ -4607,6 +4707,8 @@ void AddonOptions()
         Settings::Settings[READ_ME_POSITION_V] = Settings::DialPositionV;
         Settings::Settings[IS_SPEEDOMETER_DIAL_VISIBLE] = Settings::IsDialEnabled;
         Settings::Settings[IS_SPEEDOMETER_TABLE_VISIBLE] = Settings::IsTableEnabled;
+        Settings::Settings[FANCY_SPEEDOMETER_DIAL_VISIBLE] = Settings::FancyDialEnabled;
+        Settings::Settings[MUTED_SPEEDOMETER_DIAL_VISIBLE] = Settings::MutedDialEnabled;
         Settings::Settings[IS_OPTION_2D_ENABLED] = Settings::option2D;
         Settings::Settings[IS_OPTION_3D_ENABLED] = Settings::option3D;
         Settings::Settings[IS_OPTION_UNITS_ENABLED] = Settings::optionUnits;

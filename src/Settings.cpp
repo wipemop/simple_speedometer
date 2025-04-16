@@ -8,6 +8,8 @@ const char* READ_ME_POSITION_H = "ReadMePositionH";
 const char* READ_ME_POSITION_V = "ReadMePositionV";
 const char* IS_SPEEDOMETER_DIAL_VISIBLE = "IsSpeedometerDialVisible";
 const char* IS_SPEEDOMETER_TABLE_VISIBLE = "IsSpeedometerTableVisible";
+const char* FANCY_SPEEDOMETER_DIAL_VISIBLE = "FancySpeedometerDialVisible";
+const char* MUTED_SPEEDOMETER_DIAL_VISIBLE = "MutedSpeedometerDialVisible";
 const char* IS_OPTION_2D_ENABLED = "IsOption2DEnabled";
 const char* IS_OPTION_3D_ENABLED = "IsOption3DEnabled";
 const char* IS_OPTION_UNITS_ENABLED = "IsOptionUnitsEnabled";
@@ -22,7 +24,7 @@ const char* SPEEDOMETER_DIAL_SCALE = "SpeedometerDialScale";
 const char* IS_SPEEDOMETER_TIMER_VISIBLE = "IsSpeedometerTimerVisible";
 const char* START_FADING_DISTANCE = "StartFadingDistance";
 const char* FINISH_FADING_DISTANCE = "FinishFadingDistance";
-const char* SELF_FADING_DISTANCE = "StartFadingDistance";
+const char* SELF_FADING_DISTANCE = "SelfFadingDistance";
 const char* CIRCLE_STYLE_FLAT = "CircleStyleFlat";
 const char* CIRCLE_STYLE_ARC = "CircleStyleArc";
 const char* CIRCLE_STYLE_RING = "CircleStyleRing";
@@ -89,6 +91,14 @@ namespace Settings
 		if (!Settings[IS_SPEEDOMETER_TABLE_VISIBLE].is_null())
 		{
 			Settings[IS_SPEEDOMETER_TABLE_VISIBLE].get_to<bool>(IsTableEnabled);
+		}
+		if (!Settings[FANCY_SPEEDOMETER_DIAL_VISIBLE].is_null())
+		{
+			Settings[FANCY_SPEEDOMETER_DIAL_VISIBLE].get_to<bool>(FancyDialEnabled);
+		}
+		if (!Settings[MUTED_SPEEDOMETER_DIAL_VISIBLE].is_null())
+		{
+			Settings[MUTED_SPEEDOMETER_DIAL_VISIBLE].get_to<bool>(MutedDialEnabled);
 		}
 		if (!Settings[IS_OPTION_2D_ENABLED].is_null())
 		{
@@ -266,6 +276,8 @@ namespace Settings
 	float ReadMePositionV = 250.0f;
 	bool IsDialEnabled = true;
 	bool IsTableEnabled = false;
+	bool FancyDialEnabled = true;
+	bool MutedDialEnabled = false;
 	bool option2D = true;
 	bool option3D = false;
 	bool optionUnits = true;

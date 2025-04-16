@@ -11,6 +11,8 @@ extern const char* READ_ME_POSITION_H;
 extern const char* READ_ME_POSITION_V;
 extern const char* IS_SPEEDOMETER_DIAL_VISIBLE;
 extern const char* IS_SPEEDOMETER_TABLE_VISIBLE;
+extern const char* FANCY_SPEEDOMETER_DIAL_VISIBLE;
+extern const char* MUTED_SPEEDOMETER_DIAL_VISIBLE;
 extern const char* IS_OPTION_2D_ENABLED;
 extern const char* IS_OPTION_3D_ENABLED;
 extern const char* IS_OPTION_UNITS_ENABLED;
@@ -65,6 +67,8 @@ namespace Settings
 	extern float ReadMePositionV;
 	extern bool IsDialEnabled;
 	extern bool IsTableEnabled;
+	extern bool FancyDialEnabled;
+	extern bool MutedDialEnabled;
 	extern bool option2D;
 	extern bool option3D;
 	extern bool optionUnits;
