@@ -222,7 +222,7 @@ extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
     AddonDef.Version.Major = 1;
     AddonDef.Version.Minor = 1;
     AddonDef.Version.Build = 3;
-    AddonDef.Version.Revision = 1;
+    AddonDef.Version.Revision = 2;
     AddonDef.Author = "Toxxa";
     AddonDef.Description = "A lightly customizable Speedometer and movement-triggered Timer system.";
     AddonDef.Load = AddonLoad;
@@ -4289,7 +4289,7 @@ void AddonOptions()
         Settings::Save(SettingsPath);
     }
 
-    if (ImGui::SliderFloat("Scale between 20% and 150%", &Settings::TimerScale, 10.0f, 150.0f, "%.0f %%"))
+    if (ImGui::SliderFloat("Scale between 20% and 150%", &Settings::TimerScale, 20.0f, 150.0f, "%.0f %%"))
     {
         Settings::Settings[SPEEDOMETER_TIMER_SCALE] = Settings::TimerScale;
         Settings::Save(SettingsPath);
