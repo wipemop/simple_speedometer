@@ -280,7 +280,7 @@ namespace Settings
 	bool IsTimerEnabled = true;
 	float startFadingDistance = 2500.0f;
 	float finishFadingDistance = 2500.0f;
-	float selfFadingDistance = 300.0f;
+	float selfFadingDistance = 200.0f;
 	bool optionFlat = true;
 	bool optionArc = false;
 	bool optionRing = false;

@@ -222,7 +222,7 @@ extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
     AddonDef.Version.Major = 1;
     AddonDef.Version.Minor = 1;
     AddonDef.Version.Build = 2;
-    AddonDef.Version.Revision = 1;
+    AddonDef.Version.Revision = 2;
     AddonDef.Author = "Toxxa";
     AddonDef.Description = "A lightly customizable Speedometer and movement-triggered Timer system.";
     AddonDef.Load = AddonLoad;
@@ -4043,7 +4043,7 @@ void AddonOptions()
         Settings::Save(SettingsPath);
     }
 
-    if (ImGui::SliderFloat("Scale between 25% and 125%", &Settings::DialScale, 25.0f, 125.0f, "%.0f %%"))
+    if (ImGui::SliderFloat("Scale between 20% and 125%", &Settings::DialScale, 20.0f, 125.0f, "%.0f %%"))
     {
         Settings::Settings[SPEEDOMETER_DIAL_SCALE] = Settings::DialScale;
         Settings::Save(SettingsPath);
@@ -4191,7 +4191,7 @@ void AddonOptions()
         Settings::Save(SettingsPath);
     }
 
-    if (ImGui::SliderFloat("Scale between 25% and 150%", &Settings::TimerScale, 25.0f, 150.0f, "%.0f %%"))
+    if (ImGui::SliderFloat("Scale between 20% and 150%", &Settings::TimerScale, 20.0f, 150.0f, "%.0f %%"))
     {
         Settings::Settings[SPEEDOMETER_TIMER_SCALE] = Settings::TimerScale;
         Settings::Save(SettingsPath);
@@ -4575,7 +4575,7 @@ void AddonOptions()
         Settings::IsTimerEnabled = true;
         Settings::startFadingDistance = 2500.0f;
         Settings::finishFadingDistance = 2500.0f;
-        Settings::selfFadingDistance = 300.0f;
+        Settings::selfFadingDistance = 200.0f;
         Settings::optionFlat = true;
         Settings::optionArc = false;
         Settings::optionRing = false;
