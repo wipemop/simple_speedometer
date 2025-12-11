@@ -151,6 +151,9 @@ static bool checkpointlist = false;
 static bool checkpointlistfinished = false;
 
 int currentMapID = 0;
+int currentMountID = 0;
+bool hideSpeedo = false;
+bool isMounted = false;
 static int lastMapID = -1;
 static std::vector<std::string> filteredSetNames;
 
@@ -221,8 +224,8 @@ extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
     AddonDef.Name = "Simple Speedometer";
     AddonDef.Version.Major = 1;
     AddonDef.Version.Minor = 1;
-    AddonDef.Version.Build = 3;
-    AddonDef.Version.Revision = 2;
+    AddonDef.Version.Build = 4;
+    AddonDef.Version.Revision = 0;
     AddonDef.Author = "Toxxa";
     AddonDef.Description = "A lightly customizable Speedometer and movement-triggered Timer system.";
     AddonDef.Load = AddonLoad;
@@ -2115,29 +2118,31 @@ void RenderTimerWindow()
             {
                 if (Settings::optionTimerRight)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 500.0f, Settings::optionTimerTop ? TimerPos.y - 105.0f : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 500.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), Settings::optionTimerTop ? TimerPos.y - 105.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)) : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
                 }
                 if (Settings::optionTimerLeft)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 105.0f : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 105.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)) : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
                 }
-                ImGui::SetNextWindowSize(ImVec2(500, 100));
+                ImGui::SetNextWindowSize(ImVec2(500 * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 100 * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f); // Setzt die Randbreite auf 2 Pixel
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))); // Setzt die Randbreite auf 2 Pixel
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 4.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))));
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2 , 1));
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))));
                 ImGui::Begin("Custom Timer info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
                 ImGui::PushFont((ImFont*)fontptr);
-                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100));
 
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.0f, 1.0f), "Custom Timer status info:");
-                ImGui::SameLine(350.0f, 0.0f);
+                ImGui::SameLine(350.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Map ID:");
-                ImGui::SameLine(430.0f, 0.0f);
+                ImGui::SameLine(430.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "%d", MumbleLink->Context.MapID);
 
@@ -2151,10 +2156,10 @@ void RenderTimerWindow()
                 {
                     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 0.6f), " YES");
                 }
-                ImGui::SameLine(350.0f, 0.0f);
+                ImGui::SameLine(350.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "X:");
-                ImGui::SameLine(383.0f, 0.0f);
+                ImGui::SameLine(383.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 char posXBuffer[128];
                 sprintf_s(posXBuffer, "%.4f", g_currentPos.X);
@@ -2171,10 +2176,10 @@ void RenderTimerWindow()
                 {
                     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 0.6f), " YES");
                 }
-                ImGui::SameLine(350.0f, 0.0f);
+                ImGui::SameLine(350.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Y:");
-                ImGui::SameLine(383.0f, 0.0f);
+                ImGui::SameLine(383.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 char posYBuffer[128];
                 sprintf_s(posYBuffer, "%.4f", g_currentPos.Y);
@@ -2194,10 +2199,10 @@ void RenderTimerWindow()
                 {
                     ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "Enter start area!");
                 }
-                ImGui::SameLine(350.0f, 0.0f);
+                ImGui::SameLine(350.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Z:");
-                ImGui::SameLine(383.0f, 0.0f);
+                ImGui::SameLine(383.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 char posZBuffer[128];
                 sprintf_s(posZBuffer, "%.4f", g_currentPos.Z);
@@ -2206,7 +2211,7 @@ void RenderTimerWindow()
 
                 ImGui::End();
                 ImGui::PopStyleColor(2);
-                ImGui::PopStyleVar(2);
+                ImGui::PopStyleVar(4);
             }
 
             // Handling the contents of the dropdown by filtering them based on Map ID
@@ -2237,26 +2242,28 @@ void RenderTimerWindow()
             {
                 if (Settings::optionTimerRight)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 500.0f, Settings::optionTimerTop ? TimerPos.y - 115.0f : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 500.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), Settings::optionTimerTop ? TimerPos.y - 103.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)) : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
                 }
                 if (Settings::optionTimerLeft)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 115.0f : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 103.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)) : TimerPos.y + Settings::TimerScale * 2.30f + 0.0f), ImGuiCond_Always);
                 }
-                ImGui::SetNextWindowSize(ImVec2(500, 114));
+                ImGui::SetNextWindowSize(ImVec2(500 * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 100 * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f);
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)));
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 2.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))));
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 1));
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))));
                 ImGui::Begin("Set selection", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
                 ImGui::PushFont((ImFont*)fontptr);
-                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100));
 
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.0f, 1.0f), "Predefined Timer settings:");
-                ImGui::SameLine(382.0f, 0.0f);
+                ImGui::SameLine(379.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
                 ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "Set options:");
 
                 ImGui::AlignTextToFramePadding();
@@ -2293,7 +2300,7 @@ void RenderTimerWindow()
                     ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 0.6f), " Me dentge");
                 }
 
-                ImGui::SameLine(378.0f, 0.0f);
+                ImGui::SameLine(378.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
@@ -2323,7 +2330,7 @@ void RenderTimerWindow()
                 // Editor button
                 if (!Coordinates::SetNames.empty() && !wasJsonMissing)
                 {
-                    ImGui::SameLine(378.0f, 0.0f);
+                    ImGui::SameLine(378.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
 
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.025f, 0.0f, 1.0f));
@@ -2426,49 +2433,51 @@ void RenderTimerWindow()
 
                 ImGui::End();
                 ImGui::PopStyleColor(2);
-                ImGui::PopStyleVar(2);
+                ImGui::PopStyleVar(4);
 
                 if (Settings::optionTimerRight)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 150.0f, Settings::optionTimerTop ? TimerPos.y - 222.0f : TimerPos.y + Settings::TimerScale * 2.30f + 121.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 5.30f - 150.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), Settings::optionTimerTop ? TimerPos.y - 215.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)) : TimerPos.y + Settings::TimerScale * 2.30f + 112.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))), ImGuiCond_Always);
                 }
                 if (Settings::optionTimerLeft)
                 {
-                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 222.0f : TimerPos.y + Settings::TimerScale * 2.30f + 121.0f), ImGuiCond_Always);
+                    ImGui::SetNextWindowPos(ImVec2(TimerPos.x + Settings::TimerScale * 0.16f, Settings::optionTimerTop ? TimerPos.y - 215.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)) : TimerPos.y + Settings::TimerScale * 2.30f + 112.0f), ImGuiCond_Always);
                 }
-                ImGui::SetNextWindowSize(ImVec2(150, 100));
+                ImGui::SetNextWindowSize(ImVec2(150 * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 100 * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f);
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)));
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 2.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))));
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 1));
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100))));
                 ImGui::Begin("Map info", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
                 ImGui::PushFont((ImFont*)fontptr);
-                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100));
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Map ID:");
-                ImGui::SameLine(80.0f, 0.0f);
+                ImGui::SameLine(80.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "%d", MumbleLink->Context.MapID);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "X:");
-                ImGui::SameLine(33.0f, 0.0f);
+                ImGui::SameLine(33.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 char posXBuffer[128];
                 sprintf_s(posXBuffer, "%.4f", g_currentPos.X);
                 ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "%s", posXBuffer);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Y:");
-                ImGui::SameLine(33.0f, 0.0f);
+                ImGui::SameLine(33.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 char posYBuffer[128];
                 sprintf_s(posYBuffer, "%.4f", g_currentPos.Y);
                 ImGui::TextColored(ImVec4(0.5f, 0.25f, 0.1f, 1.0f), "%s", posYBuffer);
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Z:");
-                ImGui::SameLine(33.0f, 0.0f);
+                ImGui::SameLine(33.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::AuxWindowFontSize / 100)), 0.0f);
 
                 char posZBuffer[128];
                 sprintf_s(posZBuffer, "%.4f", g_currentPos.Z);
@@ -2477,7 +2486,7 @@ void RenderTimerWindow()
 
                 ImGui::End();
                 ImGui::PopStyleColor(2);
-                ImGui::PopStyleVar(2);
+                ImGui::PopStyleVar(4);
 
 
             }
@@ -2642,7 +2651,7 @@ void EDTR_ShowMenu()
         }
     }
 
-    ImGui::SetNextWindowSize(ImVec2(755, 825));
+    ImGui::SetNextWindowSize(ImVec2(30.0f + 730.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 90.0f + 630.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
 
     ImGui::PushStyleColor(ImGuiCol_TitleBg, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImVec4(0.15f, 0.05f, 0.0f, 1.0f));
@@ -2661,14 +2670,19 @@ void EDTR_ShowMenu()
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.1f, 0.05f, 0.0f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.2f, 0.075f, 0.0f, 1.0f));
 
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))); // Setzt die Randbreite auf 2 Pixel
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 4.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 1));
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
+
     ImGui::Begin("Coordinate Set Editor", &EDTR_IsOpen, ImGuiWindowFlags_AlwaysAutoResize);
 
-    ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
+    ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100));
 
-    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    ImGui::Dummy(ImVec2(0.0f, 4.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
-    ImGui::SameLine(10.0f, 0.0f);
-    ImGui::SetNextItemWidth(620.0f);
+    ImGui::SameLine(10.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
+    ImGui::SetNextItemWidth(620.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)));
 
     // Coordinate Set dropdown list
     if (ImGui::BeginCombo("##Select Set", EDTR_SelectedSet.c_str()))
@@ -2681,9 +2695,9 @@ void EDTR_ShowMenu()
         ImGui::EndCombo();
     }
 
-    ImGui::SameLine(635.0f, 0.0f);
+    ImGui::SameLine(635.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Select Set");
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
 
     // Writing the contents of the selected Set name to the buffer
     auto& set = EDTR_CoordinateSets[EDTR_SelectedSet];
@@ -2696,12 +2710,12 @@ void EDTR_ShowMenu()
 
     ImGui::Separator();
 
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
-    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::SameLine(10.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Coordinate Set name and map ID:");
 
-    ImGui::SameLine(530.0f, 0.0f);
+    ImGui::SameLine(530.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
 
     // Button to import Mumble Map Id data to the Map ID input box
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.5f, 0.6f));
@@ -2713,37 +2727,37 @@ void EDTR_ShowMenu()
     ImGui::PopStyleColor();
 
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
-    ImGui::SameLine(10.0f, 0.0f);
-    ImGui::SetNextItemWidth(410.0f);
+    ImGui::SameLine(10.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
+    ImGui::SetNextItemWidth(410.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
 
     // Text box for the Coordinate Set name. This will be pre-filled with the Set name on loading the editor.
     ImGui::InputText("##Set Name", EDTR_selectedSetNameBuffer, sizeof(EDTR_selectedSetNameBuffer));
 
     ImGui::PopStyleColor();
-    ImGui::SameLine(425.0f, 0.0f);
+    ImGui::SameLine(425.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Set name");
 
-    ImGui::SameLine(530.0f, 0.0f);
-    ImGui::SetNextItemWidth(130.0f);
+    ImGui::SameLine(530.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
+    ImGui::SetNextItemWidth(130.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
 
     // Input box for the Map ID. This will be pre-filled with the current Map ID if a new set gets created.
     if (ImGui::InputInt("##Map ID", &set.MapID));
 
     ImGui::PopStyleColor();
-    ImGui::SameLine(670.0f, 0.0f);
+    ImGui::SameLine(670.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Map ID");
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
 
     ImGui::Separator();
 
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
-    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::SameLine(10.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Start location:");
 
-    ImGui::SameLine(232.0f, 0.0f);
+    ImGui::SameLine(232.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.5f, 0.6f));
 
     // Button to import Mumble positional data into the input boxes for the start location
@@ -2758,28 +2772,28 @@ void EDTR_ShowMenu()
     ImGui::PopStyleColor();
 
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
-    ImGui::SameLine(10.0f, 0.0f);
-    ImGui::SetNextItemWidth(330.0f);
+    ImGui::SameLine(10.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
+    ImGui::SetNextItemWidth(330.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
 
     // Input boxes for the start location
     if (ImGui::InputFloat3("##Start X Y Z", &set.Start.x));
 
     ImGui::PopStyleColor();
-    ImGui::SameLine(345.0f, 0.0f);
+    ImGui::SameLine(345.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Start X Y Z");
 
-    ImGui::SameLine(490.0f, 0.0f);
-    ImGui::SetNextItemWidth(110.0f);
+    ImGui::SameLine(490.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
+    ImGui::SetNextItemWidth(110.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
 
     // Input slider for the start radius
     if (ImGui::DragFloat("##Start Radius", &set.StartRadius, 1.0f, 18.0f, 900.0f, "> %.0f <"));
 
     ImGui::PopStyleColor();
-    ImGui::SameLine(610.0f, 0.0f);
+    ImGui::SameLine(610.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Start Radius");
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
 
     // Visualization of the start circle when the editor is open. Unlimited visibility range.
     g_circlethickness = 9.0f;
@@ -2812,13 +2826,13 @@ void EDTR_ShowMenu()
 
     ImGui::Separator();
 
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
-    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::SameLine(10.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Checkpoints:");
 
     // Embedded child window for the checkpoint list
-    ImGui::BeginChild("CheckpointList", ImVec2(0, 320), true, ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::BeginChild("CheckpointList", ImVec2(0, 320 * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))), true, ImGuiWindowFlags_HorizontalScrollbar);
 
     // Looping the UI setup sequentially for every checkpoint that currently exists in the Set
     for (size_t i = 0; i < set.Checkpoints.size(); ++i)
@@ -2828,18 +2842,18 @@ void EDTR_ShowMenu()
         // Numbering the checkpoints
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%zu.", i + 1);
 
-        ImGui::SameLine(35.0f, 0.0f);
-        ImGui::SetNextItemWidth(330.0f);
+        ImGui::SameLine(35.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
+        ImGui::SetNextItemWidth(330.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
 
         // Input boxes for the checkpoint locations
         if (ImGui::InputFloat3("##X Y Z", &set.Checkpoints[i].Position.x, "%.4f"));
 
         ImGui::PopStyleColor();
-        ImGui::SameLine(380.0f, 0.0f);
+        ImGui::SameLine(380.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "X Y Z");
 
-        ImGui::SameLine(475.0f, 0.0f);
+        ImGui::SameLine(475.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.5f, 0.6f));
 
@@ -2856,7 +2870,7 @@ void EDTR_ShowMenu()
         // Button to move a checkpoint up in the list
         if (i > 0)
         {
-            ImGui::SameLine(695.0f, 0.0f);
+            ImGui::SameLine(695.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
             if (ImGui::Button("/\\"))
             {
                 EDTR_PushUndoState();
@@ -2865,7 +2879,7 @@ void EDTR_ShowMenu()
         }
         else
         {
-            ImGui::SameLine(695.0f, 0.0f);
+            ImGui::SameLine(695.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
             if (ImGui::Button("--"))
             {
 
@@ -2873,15 +2887,15 @@ void EDTR_ShowMenu()
         }
 
         ImGui::Dummy(ImVec2(0.0f, 0.0f));
-        ImGui::SameLine(35.0f, 0.0f);
-        ImGui::SetNextItemWidth(330.0f);
+        ImGui::SameLine(35.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
+        ImGui::SetNextItemWidth(330.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
 
         // Input slider for the checkpoint radius 
         if (ImGui::DragFloat("##Radius", &set.Checkpoints[i].Radius, 1.0f, 18.0f, 900.0f, "> %.0f <"));
 
         ImGui::PopStyleColor();
-        ImGui::SameLine(380.0f, 0.0f);
+        ImGui::SameLine(380.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Radius");
 
         // Visualization of the checkpoint circles when the editor is open. Unlimited visibility range, added numbers for easy identification.
@@ -2917,7 +2931,7 @@ void EDTR_ShowMenu()
 
         RenderBillboardNumber({ set.Checkpoints[i].Position.x, set.Checkpoints[i].Position.y + Settings::CircleOffset / conversionFactor_u_s, set.Checkpoints[i].Position.z }, i + 1, IM_COL32(100, 255, 255, 255), 2.0f, -13.0f, -25.0f);
 
-        ImGui::SameLine(475.0f, 0.0f);
+        ImGui::SameLine(475.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.2f, 0.0f, 0.6f));
 
         // Button to delete a checkpoint
@@ -2932,7 +2946,7 @@ void EDTR_ShowMenu()
         // Button to move a checkpoint down in the list
         if (i < set.Checkpoints.size() - 1)
         {
-            ImGui::SameLine(695.0f, 0.0f);
+            ImGui::SameLine(695.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
             if (ImGui::Button("\\/"))
             {
                 EDTR_PushUndoState();
@@ -2941,7 +2955,7 @@ void EDTR_ShowMenu()
         }
         else
         {
-            ImGui::SameLine(695.0f, 0.0f);
+            ImGui::SameLine(695.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
             if (ImGui::Button("--"))
             {
 
@@ -2955,7 +2969,7 @@ void EDTR_ShowMenu()
     ImGui::EndChild();
 
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
-    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::SameLine(10.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
 
     // Button to add a new checkpoint to the list
     if (ImGui::Button("Add new Checkpoint"))
@@ -2964,7 +2978,7 @@ void EDTR_ShowMenu()
         set.Checkpoints.push_back({ {g_currentPos.X, g_currentPos.Y, g_currentPos.Z}, 75.0f });
     }
 
-    ImGui::SameLine(380.0f, 0.0f);
+    ImGui::SameLine(380.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
 
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 0.6f));
 
@@ -2973,17 +2987,17 @@ void EDTR_ShowMenu()
     {
         EDTR_Undo();
     }
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
     ImGui::PopStyleColor();
 
     ImGui::Separator();
 
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
-    ImGui::SameLine(10.0f, 0.0f);
+    ImGui::SameLine(10.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Finish location:");
 
-    ImGui::SameLine(232.0f, 0.0f);
+    ImGui::SameLine(232.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
 
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.5f, 0.6f));
 
@@ -2999,8 +3013,8 @@ void EDTR_ShowMenu()
     ImGui::PopStyleColor();
 
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
-    ImGui::SameLine(10.0f, 0.0f);
-    ImGui::SetNextItemWidth(330.0f);
+    ImGui::SameLine(10.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
+    ImGui::SetNextItemWidth(330.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
 
     // Input boxes for the finish location
@@ -3008,20 +3022,20 @@ void EDTR_ShowMenu()
 
     ImGui::PopStyleColor();
 
-    ImGui::SameLine(345.0f, 0.0f);
+    ImGui::SameLine(345.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
 
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Finish X Y Z");
 
-    ImGui::SameLine(490.0f, 0.0f);
+    ImGui::SameLine(490.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
 
-    ImGui::SetNextItemWidth(110.0f);
+    ImGui::SetNextItemWidth(110.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)));
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.25f, 0.1f, 1.0f));
 
     // Input slider for the finish circle radius
     if (ImGui::DragFloat("##Finish Radius", &set.EndRadius, 1.0f, 18.0f, 900.0f, "> %.0f <"));
 
     ImGui::PopStyleColor();
-    ImGui::SameLine(605.0f, 0.0f);
+    ImGui::SameLine(605.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Finish Radius");
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
@@ -3056,7 +3070,7 @@ void EDTR_ShowMenu()
 
     ImGui::Separator();
 
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
     ImGui::SameLine(10.0f, 0.0f);
 
@@ -3069,7 +3083,7 @@ void EDTR_ShowMenu()
         EDTR_SelectedSet = newName;
     }
 
-    ImGui::SameLine(302.0f, 0.0f);
+    ImGui::SameLine(302.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
 
     // Button to delete the currently selected Set
     if (ImGui::Button("Delete this Set"))
@@ -3078,7 +3092,7 @@ void EDTR_ShowMenu()
         EDTR_SetNames.erase(std::remove(EDTR_SetNames.begin(), EDTR_SetNames.end(), EDTR_SelectedSet), EDTR_SetNames.end());
         if (!EDTR_SetNames.empty()) EDTR_SelectedSet = EDTR_SetNames[0];
     }
-    ImGui::SameLine(583.0f, 0.0f);
+    ImGui::SameLine(583.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
 
     // Setting the radii of start and finish to values other than zero if a new Set is created
     if (newSetDefaultRadii == true)
@@ -3099,12 +3113,12 @@ void EDTR_ShowMenu()
         newSetDefaultRadii = true;
     }
 
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
 
     ImGui::Separator();
     ImGui::Separator();
 
-    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Dummy(ImVec2(0.0f, 5.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100))));
     ImGui::Dummy(ImVec2(0.0f, 0.0f));
     ImGui::SameLine(10.0f, 0.0f);
 
@@ -3138,8 +3152,8 @@ void EDTR_ShowMenu()
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "The name for the current set must not be empty! Changes have not been saved.");
         ImGui::Separator();
 
-        popup_buttonWidth = 80.0f;
-        popup_windowWidth = ImGui::GetWindowSize().x;
+        popup_buttonWidth = 80.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100));
+        popup_windowWidth = ImGui::GetWindowSize().x * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100));
         ImGui::SetCursorPosX((popup_windowWidth - popup_buttonWidth) * 0.5f);
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 0.6f));
@@ -3158,8 +3172,8 @@ void EDTR_ShowMenu()
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Please confirm saving and reloading your Sets. This cannot be undone.");
         ImGui::Separator();
 
-        popup_buttonWidth = 80.0f;
-        popup_windowWidth = ImGui::GetWindowSize().x;
+        popup_buttonWidth = 80.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100));
+        popup_windowWidth = ImGui::GetWindowSize().x * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100));
         ImGui::SetCursorPosX((popup_windowWidth - popup_buttonWidth) * 0.25f);
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 0.6f));
@@ -3216,7 +3230,7 @@ void EDTR_ShowMenu()
         EDTR_ConfirmSave = false; // Zurücksetzen
     }
 
-    ImGui::SameLine(455.0f, 0.0f);
+    ImGui::SameLine(455.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100)), 0.0f);
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 0.6f));
     if (ImGui::Button("Discard all unsaved changes"))
     {
@@ -3230,8 +3244,8 @@ void EDTR_ShowMenu()
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Please confirm discarding all unsaved changes. This cannot be undone.");
         ImGui::Separator();
 
-        popup_buttonWidth = 80.0f;
-        popup_windowWidth = ImGui::GetWindowSize().x;
+        popup_buttonWidth = 80.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100));
+        popup_windowWidth = ImGui::GetWindowSize().x * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::CoordEditFontSize / 100));
         ImGui::SetCursorPosX((popup_windowWidth - popup_buttonWidth) * 0.25f);
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 1.0f, 0.3f, 0.6f));
@@ -3272,6 +3286,7 @@ void EDTR_ShowMenu()
     ImGui::End();
 
     ImGui::PopStyleColor(16);
+    ImGui::PopStyleVar(4);
 }
 
 // Main function for the rendering of the Speedometer as well as calling the functions related to the calculations of the speedometer, the timer and the rendering of the latter
@@ -3284,7 +3299,26 @@ void AddonRender()
 
     if (NexusLink && MumbleLink && MumbleIdentity && !MumbleLink->Context.IsMapOpen && NexusLink->IsGameplay)
     {
-        if (Settings::IsDialEnabled)
+
+        if(MumbleLink->Context.MountIndex == Mumble::EMountIndex::None)
+        {
+            isMounted = false;
+        }
+        else
+        {
+            isMounted = true;
+        }
+
+        if ((Settings::optionSpeedoVisFoot && isMounted) || (Settings::optionSpeedoVisMount && !isMounted))
+        {
+            hideSpeedo = true;
+        }
+        else
+        {
+            hideSpeedo = false;
+        }
+
+        if (Settings::IsDialEnabled && !hideSpeedo)
         {
             // Setting size and position of the speedometer
             ImVec2 speedometerPos = ImVec2(Settings::DialPositionH, Settings::DialPositionV);
@@ -3663,18 +3697,20 @@ void AddonRender()
 
             if (Settings::MutedDialEnabled)
             {
-                ImGui::SetNextWindowSize(ImVec2(75, 75));
-                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x, speedometerPos.y + 10), ImGuiCond_Always);
+                ImGui::SetNextWindowSize(ImVec2(75 * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)), 70 * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100))));
+                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + Settings::DialScale * 4.34f - 75.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)), speedometerPos.y + 10), ImGuiCond_Always);
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f);
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)));
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 2.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)), 2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100))));
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 1));
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)), 2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100))));
                 ImGui::Begin("##Muted Speedometer", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
 
                 ImGui::PushFont((ImFont*)fontptr);
-                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100));
 
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "V:");
                 ImGui::SameLine(0.0f, 0.0f);
@@ -3715,26 +3751,29 @@ void AddonRender()
 
                 ImGui::End();
                 ImGui::PopStyleColor(2);
-                ImGui::PopStyleVar(2);
+                ImGui::PopStyleVar(4);
             }
             // Setting up the Speedometer-attached data chart
             if (Settings::IsTableEnabled)
             {
-                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + (Settings::MutedDialEnabled ? 48 : Settings::DialScale) * 5.42f - 260.0f, speedometerPos.y - 250.0f), ImGuiCond_Always);
-                ImGui::SetNextWindowSize(ImVec2(260.0f, 248.0f));
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f); // Setzt die Randbreite auf 2 Pixel
+                ImGui::SetNextWindowPos(ImVec2(speedometerPos.x + (Settings::MutedDialEnabled ? 48 : Settings::DialScale) * 5.42f - 260.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)), speedometerPos.y - 250.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100))), ImGuiCond_Always);
+                ImGui::SetNextWindowSize(ImVec2(260.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)), 248.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100))));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 3.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100))); // Setzt die Randbreite auf 2 Pixel
                 ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+ 
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)), 4.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100))));
+                ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)), 2.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100))));
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 1));
                 ImGui::Begin("##Data chart", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs );
 
                 ImGui::PushFont((ImFont*)fontptr);
-                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) > 1 ? 1.0f : (1.0f / ImGui::GetIO().FontGlobalScale));
+                ImGui::SetWindowFontScale((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100));
 
                 ImGui::BeginTable("SpeedTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit);
-                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 175.0f);
-                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 175.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)));
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 60.0f * ((1.0f / ImGui::GetIO().FontGlobalScale) * (Settings::MutedFontSize / 100)));
                 ImGui::TableHeadersRow();
 
                 auto AlignRight = [](const char* text) {
@@ -3796,7 +3835,7 @@ void AddonRender()
                 ImGui::PopFont();
 
                 ImGui::End();
-                ImGui::PopStyleVar(2);
+                ImGui::PopStyleVar(4);
                 ImGui::PopStyleColor(3);
             }
         }
@@ -4089,6 +4128,35 @@ void AddonOptions()
     }
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Tweak visibility of the Speedometer based on mount status");
+    if (ImGui::Checkbox("Always visible", &Settings::optionSpeedoVisAlways)) {
+        if (Settings::optionSpeedoVisAlways) { Settings::optionSpeedoVisFoot = false; Settings::optionSpeedoVisMount = false; }
+        if (!Settings::optionSpeedoVisAlways) { Settings::optionSpeedoVisAlways = true; }
+        Settings::Settings[SPEEDOMETER_VISIBLE_ALWAYS] = Settings::optionSpeedoVisAlways;
+        Settings::Settings[SPEEDOMETER_VISIBLE_ON_FOOT] = Settings::optionSpeedoVisFoot;
+        Settings::Settings[SPEEDOMETER_VISIBLE_MOUNTED] = Settings::optionSpeedoVisMount;
+        Settings::Save(SettingsPath);
+    }
+    ImGui::SameLine(200.0f, 0.0f);
+    if (ImGui::Checkbox("Only visible on foot", &Settings::optionSpeedoVisFoot)) {
+        if (Settings::optionSpeedoVisFoot) { Settings::optionSpeedoVisAlways = false; Settings::optionSpeedoVisMount = false; }
+        if (!Settings::optionSpeedoVisFoot) { Settings::optionSpeedoVisAlways = true; }
+        Settings::Settings[SPEEDOMETER_VISIBLE_ALWAYS] = Settings::optionSpeedoVisAlways;
+        Settings::Settings[SPEEDOMETER_VISIBLE_ON_FOOT] = Settings::optionSpeedoVisFoot;
+        Settings::Settings[SPEEDOMETER_VISIBLE_MOUNTED] = Settings::optionSpeedoVisMount;
+        Settings::Save(SettingsPath);
+    }
+    ImGui::SameLine(400.0f, 0.0f);
+    if (ImGui::Checkbox("Only visible while mounted", &Settings::optionSpeedoVisMount)) {
+        if (Settings::optionSpeedoVisMount) { Settings::optionSpeedoVisAlways = false; Settings::optionSpeedoVisFoot = false; }
+        if (!Settings::optionSpeedoVisMount) { Settings::optionSpeedoVisAlways = true; }
+        Settings::Settings[SPEEDOMETER_VISIBLE_ALWAYS] = Settings::optionSpeedoVisAlways;
+        Settings::Settings[SPEEDOMETER_VISIBLE_ON_FOOT] = Settings::optionSpeedoVisFoot;
+        Settings::Settings[SPEEDOMETER_VISIBLE_MOUNTED] = Settings::optionSpeedoVisMount;
+        Settings::Save(SettingsPath);
+    }
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Choose Speedometer style");
     if (ImGui::Checkbox("Fancy", &Settings::FancyDialEnabled))
     {
@@ -4145,6 +4213,14 @@ void AddonOptions()
         ImGui::BeginTooltip();
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Does not affect the muted display!");
         ImGui::EndTooltip();
+    }
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Use the sliders to adjust the font sizes used in the respective modules:");
+    if (ImGui::SliderFloat("Muted Speedometer and chart font size", &Settings::MutedFontSize, 50.0f, 200.0f, "%.0f %%"))
+    {
+        Settings::Settings[MUTED_SPEEDOMETER_FONT_SIZE] = Settings::MutedFontSize;
+        Settings::Save(SettingsPath);
     }
 
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -4459,6 +4535,20 @@ void AddonOptions()
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Auxiliary window will appear below the Timer. Best if you place your Timer at the top border of your screen.");
         ImGui::EndTooltip();
     }
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Use the sliders to adjust the font sizes used in the respective modules:");
+    if (ImGui::SliderFloat("Timer auxiliary window font size", &Settings::AuxWindowFontSize, 50.0f, 200.0f, "%.0f %%"))
+    {
+        Settings::Settings[TIMER_AUX_FONT_SIZE] = Settings::AuxWindowFontSize;
+        Settings::Save(SettingsPath);
+    }
+
+    if (ImGui::SliderFloat("Coordinate editor font size", &Settings::CoordEditFontSize, 50.0f, 200.0f, "%.0f %%"))
+    {
+        Settings::Settings[COORDINATE_EDITOR_FONT_SIZE] = Settings::CoordEditFontSize;
+        Settings::Save(SettingsPath);
+    }
 
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
     ImGui::Separator();
@@ -4656,6 +4746,9 @@ void AddonOptions()
 
         Settings::IsDialEnabled = true;
         Settings::IsTableEnabled = false;
+        Settings::optionSpeedoVisAlways = true;
+        Settings::optionSpeedoVisFoot = false;
+        Settings::optionSpeedoVisMount = false;
         Settings::FancyDialEnabled = true;
         Settings::MutedDialEnabled = false;
         Settings::option2D = true;
@@ -4671,6 +4764,10 @@ void AddonOptions()
         Settings::DialPositionH = 320.0f;
         Settings::DialPositionV = 300.0f;
         Settings::DialScale = 60.0f;
+
+        Settings::MutedFontSize = 100.0f;
+        Settings::AuxWindowFontSize = 100.0f;
+        Settings::CoordEditFontSize = 100.0f;
 
         Settings::IsTimerEnabled = true;
         Settings::startFadingDistance = 2500.0f;
@@ -4707,6 +4804,9 @@ void AddonOptions()
         Settings::Settings[READ_ME_POSITION_V] = Settings::DialPositionV;
         Settings::Settings[IS_SPEEDOMETER_DIAL_VISIBLE] = Settings::IsDialEnabled;
         Settings::Settings[IS_SPEEDOMETER_TABLE_VISIBLE] = Settings::IsTableEnabled;
+        Settings::Settings[SPEEDOMETER_VISIBLE_ALWAYS] = Settings::optionSpeedoVisAlways;
+        Settings::Settings[SPEEDOMETER_VISIBLE_ON_FOOT] = Settings::optionSpeedoVisFoot;
+        Settings::Settings[SPEEDOMETER_VISIBLE_MOUNTED] = Settings::optionSpeedoVisMount;
         Settings::Settings[FANCY_SPEEDOMETER_DIAL_VISIBLE] = Settings::FancyDialEnabled;
         Settings::Settings[MUTED_SPEEDOMETER_DIAL_VISIBLE] = Settings::MutedDialEnabled;
         Settings::Settings[IS_OPTION_2D_ENABLED] = Settings::option2D;
@@ -4720,6 +4820,9 @@ void AddonOptions()
         Settings::Settings[SPEEDOMETER_DIAL_POSITION_H] = Settings::DialPositionH;
         Settings::Settings[SPEEDOMETER_DIAL_POSITION_V] = Settings::DialPositionV;
         Settings::Settings[SPEEDOMETER_DIAL_SCALE] = Settings::DialScale;
+        Settings::Settings[MUTED_SPEEDOMETER_FONT_SIZE] = Settings::MutedFontSize;
+        Settings::Settings[TIMER_AUX_FONT_SIZE] = Settings::AuxWindowFontSize;
+        Settings::Settings[COORDINATE_EDITOR_FONT_SIZE] = Settings::CoordEditFontSize;
         Settings::Settings[IS_SPEEDOMETER_TIMER_VISIBLE] = Settings::IsTimerEnabled;
         Settings::Settings[START_FADING_DISTANCE] = Settings::startFadingDistance;
         Settings::Settings[FINISH_FADING_DISTANCE] = Settings::finishFadingDistance;

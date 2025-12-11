@@ -8,6 +8,9 @@ const char* READ_ME_POSITION_H = "ReadMePositionH";
 const char* READ_ME_POSITION_V = "ReadMePositionV";
 const char* IS_SPEEDOMETER_DIAL_VISIBLE = "IsSpeedometerDialVisible";
 const char* IS_SPEEDOMETER_TABLE_VISIBLE = "IsSpeedometerTableVisible";
+const char* SPEEDOMETER_VISIBLE_ALWAYS = "SpeedometerVisibleAlways";
+const char* SPEEDOMETER_VISIBLE_ON_FOOT = "SpeedometerVisibleOnFoot";
+const char* SPEEDOMETER_VISIBLE_MOUNTED = "SpeedometerVisibleMounted";
 const char* FANCY_SPEEDOMETER_DIAL_VISIBLE = "FancySpeedometerDialVisible";
 const char* MUTED_SPEEDOMETER_DIAL_VISIBLE = "MutedSpeedometerDialVisible";
 const char* IS_OPTION_2D_ENABLED = "IsOption2DEnabled";
@@ -21,6 +24,9 @@ const char* NEEDLE_AMPLITUDE_BEETLEPERCENT = "NeedleAmplitudeBeetlePercent";
 const char* SPEEDOMETER_DIAL_POSITION_H = "SpeedometerDialPositionH";
 const char* SPEEDOMETER_DIAL_POSITION_V = "SpeedometerDialPositionV";
 const char* SPEEDOMETER_DIAL_SCALE = "SpeedometerDialScale";
+const char* MUTED_SPEEDOMETER_FONT_SIZE = "MutedFontSize";
+const char* TIMER_AUX_FONT_SIZE = "AuxWindowFontSize";
+const char* COORDINATE_EDITOR_FONT_SIZE = "CoordEditFontSize";
 const char* IS_SPEEDOMETER_TIMER_VISIBLE = "IsSpeedometerTimerVisible";
 const char* START_FADING_DISTANCE = "StartFadingDistance";
 const char* FINISH_FADING_DISTANCE = "FinishFadingDistance";
@@ -100,6 +106,18 @@ namespace Settings
 		{
 			Settings[MUTED_SPEEDOMETER_DIAL_VISIBLE].get_to<bool>(MutedDialEnabled);
 		}
+		if (!Settings[SPEEDOMETER_VISIBLE_ALWAYS].is_null())
+		{
+			Settings[SPEEDOMETER_VISIBLE_ALWAYS].get_to<bool>(optionSpeedoVisAlways);
+		}
+		if (!Settings[SPEEDOMETER_VISIBLE_ON_FOOT].is_null())
+		{
+			Settings[SPEEDOMETER_VISIBLE_ON_FOOT].get_to<bool>(optionSpeedoVisFoot);
+		}
+		if (!Settings[SPEEDOMETER_VISIBLE_MOUNTED].is_null())
+		{
+			Settings[SPEEDOMETER_VISIBLE_MOUNTED].get_to<bool>(optionSpeedoVisMount);
+		}
 		if (!Settings[IS_OPTION_2D_ENABLED].is_null())
 		{
 			Settings[IS_OPTION_2D_ENABLED].get_to<bool>(option2D);
@@ -143,6 +161,18 @@ namespace Settings
 		if (!Settings[SPEEDOMETER_DIAL_SCALE].is_null())
 		{
 			Settings[SPEEDOMETER_DIAL_SCALE].get_to<float>(DialScale);
+		}
+		if (!Settings[MUTED_SPEEDOMETER_FONT_SIZE].is_null())
+		{
+			Settings[MUTED_SPEEDOMETER_FONT_SIZE].get_to<float>(MutedFontSize);
+		}
+		if (!Settings[TIMER_AUX_FONT_SIZE].is_null())
+		{
+			Settings[TIMER_AUX_FONT_SIZE].get_to<float>(AuxWindowFontSize);
+		}
+		if (!Settings[COORDINATE_EDITOR_FONT_SIZE].is_null())
+		{
+			Settings[COORDINATE_EDITOR_FONT_SIZE].get_to<float>(CoordEditFontSize);
 		}
 		if (!Settings[IS_SPEEDOMETER_TIMER_VISIBLE].is_null())
 		{
@@ -276,6 +306,9 @@ namespace Settings
 	float ReadMePositionV = 250.0f;
 	bool IsDialEnabled = true;
 	bool IsTableEnabled = false;
+	bool optionSpeedoVisAlways = true;
+	bool optionSpeedoVisFoot = false;
+	bool optionSpeedoVisMount = false;
 	bool FancyDialEnabled = true;
 	bool MutedDialEnabled = false;
 	bool option2D = true;
@@ -289,6 +322,9 @@ namespace Settings
 	float DialPositionH = 320.0f;
 	float DialPositionV = 300.0f;
 	float DialScale = 60.0f;
+	float MutedFontSize = 100.0f;
+	float AuxWindowFontSize = 100.0f;
+	float CoordEditFontSize = 100.0f;
 	bool IsTimerEnabled = true;
 	float startFadingDistance = 2500.0f;
 	float finishFadingDistance = 2500.0f;
