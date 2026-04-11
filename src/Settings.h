@@ -55,6 +55,10 @@ extern const char* PREDEF_TIMER_SET;
 extern const char* SPEEDOMETER_TIMER_POSITION_H;
 extern const char* SPEEDOMETER_TIMER_POSITION_V;
 extern const char* SPEEDOMETER_TIMER_SCALE;
+extern const char* IS_JUMPIONSHIPS_MARK_VISIBLE;
+extern const char* JUMPIONSHIPS_MARK_POSITION_H;
+extern const char* JUMPIONSHIPS_MARK_POSITION_V;
+extern const char* JUMPIONSHIPS_MARK_SCALE;
 extern const char* RESTORING_DEFAULTS;
 
 
@@ -117,6 +121,10 @@ namespace Settings
 	extern float TimerPositionH;
 	extern float TimerPositionV;
 	extern float TimerScale;
+	extern bool IsMarkEnabled;
+	extern float MarkPositionH;
+	extern float MarkPositionV;
+	extern float MarkScale;
 	extern bool restoreDefaults;
 
 	//void DoSomething(const char* aIdentifier, bool aIsRelease);

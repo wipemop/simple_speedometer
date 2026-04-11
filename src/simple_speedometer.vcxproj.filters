@@ -115,6 +115,10 @@
     <Image Include="timer_indicators.png">
       <Filter>resources</Filter>
     </Image>
+    <Image Include="watermark_background.png">
+      <Filter>resources</Filter>
+    </Image>
+    <Image Include="bitmap1.bmp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">

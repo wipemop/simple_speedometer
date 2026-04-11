@@ -80,6 +80,7 @@ const float conversionFactor_beetle = 2.16507f;
 
 static float imageAlpha = 1.0f;
 static float timerimageAlpha = 1.0f;
+static float markAlpha = 1.0f;
 const float fadeSpeed = 0.3f;
 
 static bool fireAnimationTriggered = false;
@@ -191,6 +192,7 @@ Texture* pivotTexture = nullptr;
 Texture* timerTexture = nullptr;
 Texture* stopwatchTexture = nullptr;
 Texture* timerindicatorTexture = nullptr;
+Texture* watermarkTexture = nullptr;
 
 extern Texture* speedometerTexture;
 extern Texture* needleTexture;
@@ -202,6 +204,7 @@ extern Texture* pivotTexture;
 extern Texture* timerTexture;
 extern Texture* stopwatchTexture;
 extern Texture* timerindicatorTexture;
+extern Texture* watermarkTexture;
 
 // DllMain: Main entry point for DLL. We are not interested in this, all we get is our own HMODULE in case we need it.
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
@@ -223,8 +226,8 @@ extern "C" __declspec(dllexport) AddonDefinition* GetAddonDef()
     AddonDef.APIVersion = NEXUS_API_VERSION;
     AddonDef.Name = "Simple Speedometer";
     AddonDef.Version.Major = 1;
-    AddonDef.Version.Minor = 1;
-    AddonDef.Version.Build = 4;
+    AddonDef.Version.Minor = 2;
+    AddonDef.Version.Build = 0;
     AddonDef.Version.Revision = 0;
     AddonDef.Author = "Toxxa";
     AddonDef.Description = "A lightly customizable Speedometer and movement-triggered Timer system.";
@@ -3840,6 +3843,38 @@ void AddonRender()
             }
         }
 
+        if (Settings::IsMarkEnabled)
+        {
+            // Setting size and position of the watermark
+            ImVec2 watermarkPos = ImVec2(Settings::MarkPositionH, Settings::MarkPositionV);
+            ImVec2 markSize = ImVec2(Settings::MarkScale * 1.60f, Settings::MarkScale * 1.60f);
+
+            // Handling transparency on mouseover
+            ImVec2 mousePos = ImGui::GetMousePos();
+            bool isMouseOver = (mousePos.x >= watermarkPos.x && mousePos.x <= watermarkPos.x + markSize.x && mousePos.y >= watermarkPos.y && mousePos.y <= watermarkPos.y + markSize.y);
+            float targetAlpha = isMouseOver ? 0.2f : 1.0f;
+            markAlpha += (targetAlpha - markAlpha) * fadeSpeed;
+
+            // Setting up ImGui Window for the Jumpionships Watermark
+            ImGui::SetNextWindowBgAlpha(0.0f);
+            ImGui::SetNextWindowPos(ImVec2(watermarkPos), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(markSize));
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            ImGui::Begin("Watermark", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoInputs);
+            if (watermarkTexture)
+            {
+                ImGui::Image(watermarkTexture->Resource, markSize, ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, markAlpha));
+            }
+            else
+            {
+                watermarkTexture = APIDefs->Textures.GetOrCreateFromResource("watermark_background", watermark_background, hSelf);
+            }
+            ImGui::End();
+            ImGui::PopStyleVar(2);
+        }
+
         /*
         if (Settings::IsReadMeEnabled)
         {
@@ -4734,8 +4769,42 @@ void AddonOptions()
     ImGui::Separator();
     ImGui::Dummy(ImVec2(0.0f, 5.0f));
 
-    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Restore defaults!");
-    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Need a do-over, then hit this button:");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Jumpionships 2026 Watermark:");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Toggle visibility on or off");
+    if (ImGui::Checkbox("Show Watermark", &Settings::IsMarkEnabled))
+    {
+        Settings::Settings[IS_JUMPIONSHIPS_MARK_VISIBLE] = Settings::IsMarkEnabled;
+        Settings::Save(SettingsPath);
+    }
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Use the sliders to adjust the position of the watermark:");
+    if (ImGui::SliderFloat("hPos Mark", &Settings::MarkPositionH, NexusLink->Width * 0.0f, NexusLink->Width * 1.0f, "%.0f X%"))
+    {
+        Settings::Settings[JUMPIONSHIPS_MARK_POSITION_H] = Settings::MarkPositionH;
+        Settings::Save(SettingsPath);
+    }
+
+    if (ImGui::SliderFloat("vPos Mark", &Settings::MarkPositionV, NexusLink->Height * 0.0f, NexusLink->Height * 1.0f, "%.0f Y%"))
+    {
+        Settings::Settings[JUMPIONSHIPS_MARK_POSITION_V] = Settings::MarkPositionV;
+        Settings::Save(SettingsPath);
+    }
+
+    if (ImGui::SliderFloat("Scale between 50% and 150%", &Settings::MarkScale, 50.0f, 150.0f, "%.0f %%"))
+    {
+        Settings::Settings[JUMPIONSHIPS_MARK_SCALE] = Settings::MarkScale;
+        Settings::Save(SettingsPath);
+    }
+
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+    ImGui::Separator();
+    ImGui::Separator();
+    ImGui::Dummy(ImVec2(0.0f, 5.0f));
+
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 1.0f), "Restore defaults?");
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "If you need a do-over, then hit this button. This cannot be undone!!");
     if (ImGui::Button("Reset Defaults"))
     {
         basePos = g_currentPos;
@@ -4795,9 +4864,14 @@ void AddonOptions()
         Settings::startDiameter = 100.0f;
         Settings::finishDiameter = 200.0f;
 
-        Settings::TimerPositionH = 260.0f;
+        Settings::TimerPositionH = 250.0f;
         Settings::TimerPositionV = 560.0f;
         Settings::TimerScale = 60.0f;
+
+        Settings::IsMarkEnabled = false;
+        Settings::MarkPositionH = 600.0f;
+        Settings::MarkPositionV = 520.0f;
+        Settings::MarkScale = 100.0f;
 
         Settings::Settings[IS_READ_ME_VISIBLE] = Settings::IsReadMeEnabled;
         Settings::Settings[READ_ME_POSITION_H] = Settings::DialPositionH;
@@ -4845,6 +4919,9 @@ void AddonOptions()
         Settings::Settings[SPEEDOMETER_TIMER_POSITION_H] = Settings::TimerPositionH;
         Settings::Settings[SPEEDOMETER_TIMER_POSITION_V] = Settings::TimerPositionV;
         Settings::Settings[SPEEDOMETER_TIMER_SCALE] = Settings::TimerScale;
+        Settings::Settings[IS_JUMPIONSHIPS_MARK_VISIBLE] = Settings::IsMarkEnabled;
+        Settings::Settings[JUMPIONSHIPS_MARK_POSITION_H] = Settings::MarkPositionH;
+        Settings::Settings[JUMPIONSHIPS_MARK_POSITION_V] = Settings::MarkPositionV;
 
         Settings::Save(SettingsPath);
 

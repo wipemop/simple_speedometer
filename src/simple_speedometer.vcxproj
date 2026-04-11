@@ -203,6 +203,7 @@
     <ResourceCompile Include="Resource.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="bitmap1.bmp" />
     <Image Include="fire_sparkse.png" />
     <Image Include="pivot_sparks.png" />
     <Image Include="speedometer_background.png" />
@@ -213,6 +214,7 @@
     <Image Include="timer_background.png" />
     <Image Include="timer_indicators.png" />
     <Image Include="timer_stopwatch.png" />
+    <Image Include="watermark_background.png" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="crash-a-like.ttf" />

@@ -58,6 +58,10 @@ const char* FINISH_Y_OFFSET = "FinishYOffset";
 const char* SPEEDOMETER_TIMER_POSITION_H = "SpeedometerTimerPositionH";
 const char* SPEEDOMETER_TIMER_POSITION_V = "SpeedometerTimerPositionV";
 const char* SPEEDOMETER_TIMER_SCALE = "SpeedometerTimerScale";
+const char* IS_JUMPIONSHIPS_MARK_VISIBLE = "IsJumpionshipsMarkVisible";
+const char* JUMPIONSHIPS_MARK_POSITION_H = "JumpionshipsMarkPositionH";
+const char* JUMPIONSHIPS_MARK_POSITION_V = "JumpionshipsMarkPositionV";
+const char* JUMPIONSHIPS_MARK_SCALE = "JumpionshipsMarkScale";
 const char* RESTORING_DEFAULTS = "RestoringDefaults";
 
 namespace Settings
@@ -274,6 +278,22 @@ namespace Settings
 		{
 			Settings[SPEEDOMETER_TIMER_SCALE].get_to<float>(TimerScale);
 		}
+		if (!Settings[IS_JUMPIONSHIPS_MARK_VISIBLE].is_null())
+		{
+			Settings[IS_JUMPIONSHIPS_MARK_VISIBLE].get_to<bool>(IsMarkEnabled);
+		}
+		if (!Settings[JUMPIONSHIPS_MARK_POSITION_H].is_null())
+		{
+			Settings[JUMPIONSHIPS_MARK_POSITION_H].get_to<float>(MarkPositionH);
+		}
+		if (!Settings[JUMPIONSHIPS_MARK_POSITION_V].is_null())
+		{
+			Settings[JUMPIONSHIPS_MARK_POSITION_V].get_to<float>(MarkPositionV);
+		}
+		if (!Settings[JUMPIONSHIPS_MARK_SCALE].is_null())
+		{
+			Settings[JUMPIONSHIPS_MARK_SCALE].get_to<float>(MarkScale);
+		}
 		if (!Settings[RESTORING_DEFAULTS].is_null())
 		{
 			Settings[RESTORING_DEFAULTS].get_to<bool>(restoreDefaults);
@@ -347,8 +367,12 @@ namespace Settings
 	float startDiameter = 100.0f;
 	float finishDiameter = 200.0f;
 	int selectedPredefSet = 0;
-	float TimerPositionH = 260.0f;
+	float TimerPositionH = 250.0f;
 	float TimerPositionV = 560.0f;
 	float TimerScale = 60.0f;
+	bool IsMarkEnabled = false;
+	float MarkPositionH = 600.0f;
+	float MarkPositionV = 520.0f;
+	float MarkScale = 100.0f;
 	bool restoreDefaults = false;
 }
