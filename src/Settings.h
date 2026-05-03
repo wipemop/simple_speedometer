@@ -44,6 +44,8 @@ extern const char* TIMER_AUX_TOP_ALIGNED;
 extern const char* TIMER_AUX_BOTTOM_ALIGNED;
 extern const char* IS_OPTION_PAUSE_ENABLED;
 extern const char* IS_OPTION_STOP_ENABLED;
+extern const char* IS_AUTOSTOP_SAB_ENABLED;
+extern const char* IS_AUTOSTOP_SAB_WIZARD_ENABLED;
 extern const char* MANUAL_START_DIAMETER_UNITS;
 extern const char* IS_OPTION_MANUAL_ENABLED;
 extern const char* IS_OPTION_PREDEFINED_ENABLED;
@@ -106,6 +108,8 @@ namespace Settings
 	extern float CircleOffset;
 	extern bool optionPause;
 	extern bool optionStop;
+	extern bool optionAutostopSAB;
+	extern bool optionAutostopSABWizard;
 	extern bool optionTimerRight;
 	extern bool optionTimerLeft;
 	extern bool optionTimerTop;

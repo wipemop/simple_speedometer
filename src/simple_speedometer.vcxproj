@@ -189,6 +189,7 @@
     <ClInclude Include="Shared.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="arcdps.cpp" />
     <ClCompile Include="Coordinates.cpp" />
     <ClCompile Include="entry.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
@@ -196,6 +197,7 @@
     <ClCompile Include="imgui\imgui_draw.cpp" />
     <ClCompile Include="imgui\imgui_tables.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
+    <ClCompile Include="SAB.cpp" />
     <ClCompile Include="Settings.cpp" />
     <ClCompile Include="Shared.cpp" />
   </ItemGroup>
