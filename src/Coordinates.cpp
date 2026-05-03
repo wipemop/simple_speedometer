@@ -1,6 +1,6 @@
 #include "Coordinates.h"
 #include "Settings.h"
-#include "shared.h"
+#include "Shared.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>

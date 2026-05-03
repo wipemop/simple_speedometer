@@ -4,6 +4,8 @@
 #include "nexus/Nexus.h"
 #include "mumble/Mumble.h"
 
+constexpr const char* addonName = "Simple Speedometer";
+
 extern AddonAPI* APIDefs;
 
 extern Mumble::Data* MumbleLink;

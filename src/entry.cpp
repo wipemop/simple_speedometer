@@ -1,7 +1,7 @@
 ﻿// DISCLAIMER: I don't have the slightest clue about C++. This was built with my own ideas, but almost entirely with the help of ChatGPT, using the Raidcore / Nexus Addon-Template as a foundation.
 // As such, the code will likely be inefficient and generally not pretty. I tried my best optimizing obvious drawbacks in structure with my very limited expertise, but it does get the job done.
 
-#include <Windows.h>
+#include <windows.h>
 #include <string>
 #include <cstring>
 #include <algorithm>
@@ -17,7 +17,7 @@
 #include "mumble/Mumble.h"
 #include "imgui/imgui.h"
 
-#include "shared.h"
+#include "Shared.h"
 #include "Settings.h"
 #include "Coordinates.h"
 #include "resource.h"
@@ -287,7 +287,7 @@ void ReceiveFont(const char* aIdentifier, void* aFont) {
 
     if (aFont == nullptr) {
     #ifndef NDEBUG
-        APIDefs->Log(ELogLevel_CRITICAL, ADDON_NAME, ("Received nullptr for font " + std::string(aIdentifier)).c_str());
+        APIDefs->Log(ELogLevel_CRITICAL, addonName, ("Received nullptr for font " + std::string(aIdentifier)).c_str());
     #endif // !NDEBUG
         return;
     }

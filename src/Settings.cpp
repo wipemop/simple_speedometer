@@ -1,5 +1,5 @@
 #include "Settings.h"
-#include "shared.h"
+#include "Shared.h"
 #include <filesystem>
 #include <fstream>
 
