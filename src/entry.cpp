@@ -1,23 +1,25 @@
 ﻿// DISCLAIMER: I don't have the slightest clue about C++. This was built with my own ideas, but almost entirely with the help of ChatGPT, using the Raidcore / Nexus Addon-Template as a foundation.
 // As such, the code will likely be inefficient and generally not pretty. I tried my best optimizing obvious drawbacks in structure with my very limited expertise, but it does get the job done.
 
-#include <Windows.h>
+#include <windows.h>
 #include <string>
 #include <cstring>
 #include <algorithm>
 #include <stack>
-#include <stdio.h>
 #include <cstdio>
 #include <cmath>
 #include <vector>
 #include <filesystem>
 #include <mutex>
 #include <fstream>
+#include <sstream>
 #include "nexus/Nexus.h"
 #include "mumble/Mumble.h"
 #include "imgui/imgui.h"
 
-#include "shared.h"
+#include "arcdps.h"
+#include "SAB.hpp"
+#include "Shared.h"
 #include "Settings.h"
 #include "Coordinates.h"
 #include "resource.h"
@@ -36,6 +38,8 @@ void InitializeHighResTimer();
 void SpeedometerToggleVisibility(const char* aIdentifier, bool aIsRelease);
 void TimerToggleVisibility(const char* aIdentifier, bool aIsRelease);
 void TimerPauseReset(const char* aIdentifier, bool aIsRelease);
+
+static void OnArcDPSCombatEvent(void* aEventArgs);
 
 void EDTR_ShowMenu();
 void EDTR_LoadCoordinates();
@@ -262,6 +266,8 @@ void AddonLoad(AddonAPI* aApi)
     APIDefs->InputBinds.RegisterWithString("Toggle Timer visibility", TimerToggleVisibility, "(null)");
     APIDefs->InputBinds.RegisterWithString("Pause or reset the Timer / set locations / toggle selection window", TimerPauseReset, "(null)");
 
+    APIDefs->Events.Subscribe("EV_ARCDPS_COMBATEVENT_LOCAL_RAW", OnArcDPSCombatEvent);
+
     AddonPath = APIDefs->Paths.GetAddonDirectory("Simple Speedometer");
     SettingsPath = APIDefs->Paths.GetAddonDirectory("Simple Speedometer/settings.json");
     CoordinatesPath = APIDefs->Paths.GetAddonDirectory("Simple Speedometer/coordinates.json");
@@ -287,7 +293,7 @@ void ReceiveFont(const char* aIdentifier, void* aFont) {
 
     if (aFont == nullptr) {
     #ifndef NDEBUG
-        APIDefs->Log(ELogLevel_CRITICAL, ADDON_NAME, ("Received nullptr for font " + std::string(aIdentifier)).c_str());
+        APIDefs->Log(ELogLevel_CRITICAL, addonName, ("Received nullptr for font " + std::string(aIdentifier)).c_str());
     #endif // !NDEBUG
         return;
     }
@@ -308,6 +314,8 @@ void AddonUnload()
     APIDefs->InputBinds.Deregister("Toggle Speedometer visibility");
     APIDefs->InputBinds.Deregister("Toggle Timer visibility");
     APIDefs->InputBinds.Deregister("Pause or reset the Timer / set locations / toggle selection window");
+
+    APIDefs->Events.Unsubscribe("EV_ARCDPS_COMBATEVENT_LOCAL_RAW", OnArcDPSCombatEvent);
 
     MumbleLink = nullptr;
     NexusLink = nullptr;
@@ -4011,6 +4019,22 @@ void TimerToggleVisibility(const char* aIdentifier, bool aIsRelease)
     }
 }
 
+static void ManualTimerPause()
+{
+    if (!Settings::optionManual)
+        return;
+
+    const double currElapsed = static_cast<double>(current.QuadPart - timerStart.QuadPart) / frequency.QuadPart;
+
+    if (currElapsed > 0.0)
+    {
+        timerPaused = true;
+        pausedElapsedSeconds = currElapsed;
+        timerRunning = false;
+        pausePos = MumbleLink->AvatarPosition;
+    }
+}
+
 // Handling the keybind that pauses or resets the Timer
 void TimerPauseReset(const char* aIdentifier, bool aIsRelease)
 {
@@ -4023,14 +4047,7 @@ void TimerPauseReset(const char* aIdentifier, bool aIsRelease)
         {
             if (!timerPaused && timerRunning)
             {
-                double currElapsed = static_cast<double>(current.QuadPart - timerStart.QuadPart) / frequency.QuadPart;
-                if (currElapsed > 0.0)
-                {
-                    timerPaused = true;
-                    pausedElapsedSeconds = currElapsed;
-                    timerRunning = false;
-                    pausePos = currentPos;
-                }
+                ManualTimerPause();
             }
 
             else if (timerPaused)
@@ -4739,6 +4756,19 @@ void AddonOptions()
         ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "If paused, the Timer will be stopped and cannot resume. Reset required to start again.");
         ImGui::EndTooltip();
     }
+
+    ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Choose when the timer stops automatically");
+    if (ImGui::Checkbox("After SAB boss/cage kill", &Settings::optionAutostopSAB))
+    {
+        Settings::Settings[IS_AUTOSTOP_SAB_ENABLED] = Settings::optionAutostopSAB;
+        Settings::Save(SettingsPath);
+    }
+    if (ImGui::Checkbox("After SAB storm wizard kill", &Settings::optionAutostopSABWizard))
+    {
+        Settings::Settings[IS_AUTOSTOP_SAB_WIZARD_ENABLED] = Settings::optionAutostopSABWizard;
+        Settings::Save(SettingsPath);
+    }
+
     ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.1f, 0.5f), "Click and hold, then slide to set the manual start location radius in units:");
     if (ImGui::DragFloat("Manual start and pause circle radii (18 - 900 units)", &Settings::manualstartDiameter, 1.0f, 18.0f, 900.0f, "%.1f units"))
     {
@@ -4935,4 +4965,64 @@ void AddonOptions()
     }
     ImGui::Separator();
     ImGui::Separator();
+}
+
+static void OnArcDPSCombatEvent(void* aEventArgs)
+{
+    static int32_t bossDamage = 0;
+    static uint32_t lastBossID = 0;
+    static SABBossTracker bossTracker;
+
+    EvCombatData* event = static_cast<EvCombatData*>(aEventArgs);
+
+    if (!event)
+        return;
+
+    // LogCombatEvent(event->ev, event->src, event->dst, event->skillname);
+
+    // Hard-reset on map join
+    if ((!event->ev && !event->src->elite && event->src->prof))
+    {
+        APIDefs->Log(ELogLevel_DEBUG, addonName, "Player joined instance -> resetting damage counter");
+        bossDamage = 0;
+        bossTracker.Reset();
+        return;
+    }
+
+    const cbtevent* ev = event->ev;
+    const ag* dst = event->dst;
+
+    if (!ev || !dst)
+        return;
+
+    std::stringstream ss;
+
+    const auto bossInfo = bossTracker.CategorizeBoss(*ev, *dst);
+
+    // No boss -> ignore
+    if (!bossInfo.has_value())
+        return;
+
+    // If encountering a different boss than before, reset damage counter
+    if (bossInfo->id != lastBossID)
+    {
+        ss << "Detected new boss: " << std::hex << bossInfo->id << " -> Resetting damage counter\n" << std::dec;
+        bossDamage = 0;
+        lastBossID = bossInfo->id;
+    }
+
+    bossDamage += std::abs(ev->buff ? ev->buff_dmg : ev->value);
+
+    ss << "Dealt " << bossDamage << " damage to enemy " << std::hex << dst->prof << '\n' << std::dec;
+
+    if (bossDamage >= bossInfo->health)
+    {
+        ss << "Boss killed!";
+
+        if (Settings::optionAutostopSAB || (Settings::optionAutostopSABWizard && bossInfo->type == SABBossType::Wizard))
+            if (!timerPaused && timerRunning)
+                ManualTimerPause();
+    }
+
+    APIDefs->Log(ELogLevel_DEBUG, addonName, ss.str().c_str());
 }

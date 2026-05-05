@@ -1,5 +1,5 @@
 #include "Settings.h"
-#include "shared.h"
+#include "Shared.h"
 #include <filesystem>
 #include <fstream>
 
@@ -41,6 +41,8 @@ const char* TIMER_AUX_TOP_ALIGNED = "TimerAuxTopAligned";
 const char* TIMER_AUX_BOTTOM_ALIGNED = "TimerAuxBottomAligned";
 const char* IS_OPTION_PAUSE_ENABLED = "IsOptionPauseEnabled";
 const char* IS_OPTION_STOP_ENABLED = "IsOptionStopEnabled";
+const char* IS_AUTOSTOP_SAB_ENABLED = "IsAutostopSABEnabled";
+const char* IS_AUTOSTOP_SAB_WIZARD_ENABLED = "IsAutostopSABWizardEnabled";
 const char* MANUAL_START_DIAMETER_UNITS = "ManualStartDiameterUnits";
 const char* IS_OPTION_MANUAL_ENABLED = "IsOptionManualEnabled";
 const char* IS_OPTION_PREDEFINED_ENABLED = "IsOptionPredefinedEnabled";
@@ -234,6 +236,14 @@ namespace Settings
 		{
 			Settings[IS_OPTION_STOP_ENABLED].get_to<bool>(optionStop);
 		}
+		if (!Settings[IS_AUTOSTOP_SAB_ENABLED].is_null())
+		{
+			Settings[IS_AUTOSTOP_SAB_ENABLED].get_to<bool>(optionAutostopSAB);
+		}
+		if (!Settings[IS_AUTOSTOP_SAB_WIZARD_ENABLED].is_null())
+		{
+			Settings[IS_AUTOSTOP_SAB_WIZARD_ENABLED].get_to<bool>(optionAutostopSABWizard);
+		}
 		if (!Settings[MANUAL_START_DIAMETER_UNITS].is_null())
 		{
 			Settings[MANUAL_START_DIAMETER_UNITS].get_to<float>(manualstartDiameter);
@@ -354,6 +364,8 @@ namespace Settings
 	bool optionRing = false;
 	float CircleOffset = 0.0f;
 	bool optionPause = true;
+	bool optionAutostopSAB = true;
+	bool optionAutostopSABWizard = false;
 	bool optionStop = false;
 	bool optionTimerRight = true;
 	bool optionTimerLeft = false;
